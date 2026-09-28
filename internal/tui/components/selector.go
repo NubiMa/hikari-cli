@@ -18,7 +18,7 @@ type SelectorItem struct {
 
 // SelectorChosenMsg is sent when the user selects an item.
 type SelectorChosenMsg struct {
-	Context string       // e.g. "provider", "persona", "model", "theme"
+	Context string // e.g. "provider", "persona", "model", "theme"
 	Item    SelectorItem
 }
 

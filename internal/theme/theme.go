@@ -11,27 +11,27 @@ import (
 
 // Theme represents a color palette configuration for the Hikari TUI.
 type Theme struct {
-	Name        string        `toml:"name"`
-	Description string        `toml:"description"`
-	Colors      ColorPalette  `toml:"colors"`
+	Name        string       `toml:"name"`
+	Description string       `toml:"description"`
+	Colors      ColorPalette `toml:"colors"`
 }
 
 // ColorPalette defines hex colors for all TUI elements.
 type ColorPalette struct {
-	Primary     string `toml:"primary"`
-	Accent      string `toml:"accent"`
-	Dim         string `toml:"dim"`
-	Subtle      string `toml:"subtle"`
-	Text        string `toml:"text"`
-	TextMuted   string `toml:"text_muted"`
-	User        string `toml:"user"`
-	Assistant   string `toml:"assistant"`
-	System      string `toml:"system"`
-	Success     string `toml:"success"`
-	Error       string `toml:"error"`
-	Warning     string `toml:"warning"`
-	Border      string `toml:"border"`
-	Background  string `toml:"background"`
+	Primary    string `toml:"primary"`
+	Accent     string `toml:"accent"`
+	Dim        string `toml:"dim"`
+	Subtle     string `toml:"subtle"`
+	Text       string `toml:"text"`
+	TextMuted  string `toml:"text_muted"`
+	User       string `toml:"user"`
+	Assistant  string `toml:"assistant"`
+	System     string `toml:"system"`
+	Success    string `toml:"success"`
+	Error      string `toml:"error"`
+	Warning    string `toml:"warning"`
+	Border     string `toml:"border"`
+	Background string `toml:"background"`
 }
 
 // DefaultTheme returns the default purple/violet dark theme for Hikari.

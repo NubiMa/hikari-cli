@@ -143,8 +143,8 @@ func (p *Provider) Status(ctx context.Context) (provider.ProviderStatus, error) 
 // tagsResponse mirrors the Ollama GET /api/tags response.
 type tagsResponse struct {
 	Models []struct {
-		Name  string `json:"name"`
-		Size  int64  `json:"size"`
+		Name string `json:"name"`
+		Size int64  `json:"size"`
 	} `json:"models"`
 }
 

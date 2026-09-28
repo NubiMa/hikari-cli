@@ -19,9 +19,9 @@ import (
 
 // Config is the root configuration structure for Hikari.
 type Config struct {
-	Default   DefaultConfig              `toml:"default"`
-	Providers map[string]ProviderConfig  `toml:"providers"`
-	UI        UIConfig                   `toml:"ui"`
+	Default   DefaultConfig             `toml:"default"`
+	Providers map[string]ProviderConfig `toml:"providers"`
+	UI        UIConfig                  `toml:"ui"`
 }
 
 // DefaultConfig holds the active defaults chosen by the user.

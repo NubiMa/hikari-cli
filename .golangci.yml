@@ -1,0 +1,27 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - ineffassign
+    - errcheck
+    - unused
+    - misspell
+
+linters-settings:
+  govet:
+    enable-all: false
+  errcheck:
+    check-type-assertions: false
+    check-blank: false
+
+issues:
+  exclude-dirs:
+    - vendor
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck

@@ -71,12 +71,12 @@ var (
 	CommandPopupMatch lipgloss.Style
 
 	// Sidebar / Context
-	SidebarBox        lipgloss.Style
-	SidebarHeader     lipgloss.Style
-	SidebarSection    lipgloss.Style
-	SidebarKey        lipgloss.Style
-	SidebarVal        lipgloss.Style
-	SidebarBadge      lipgloss.Style
+	SidebarBox     lipgloss.Style
+	SidebarHeader  lipgloss.Style
+	SidebarSection lipgloss.Style
+	SidebarKey     lipgloss.Style
+	SidebarVal     lipgloss.Style
+	SidebarBadge   lipgloss.Style
 
 	// Indicators & Status
 	ProviderConnected    lipgloss.Style

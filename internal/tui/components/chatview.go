@@ -19,13 +19,13 @@ type ChatMessage struct {
 
 // ChatView holds and renders the conversation message list with visual polish.
 type ChatView struct {
-	Width        int
-	Height       int
-	Messages     []ChatMessage
-	Streaming    string // current in-progress assistant token accumulator
-	IsStreaming  bool
-	scrollOffset int
-	AsciiBanner  string
+	Width         int
+	Height        int
+	Messages      []ChatMessage
+	Streaming     string // current in-progress assistant token accumulator
+	IsStreaming   bool
+	scrollOffset  int
+	AsciiBanner   string
 	ActivePersona string
 }
 

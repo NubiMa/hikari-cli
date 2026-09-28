@@ -77,7 +77,7 @@ func TestModels(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{
 			"models": []map[string]any{
 				{"name": "llama3.2", "size": int64(4_000_000_000)},
-				{"name": "mistral",  "size": int64(7_000_000_000)},
+				{"name": "mistral", "size": int64(7_000_000_000)},
 			},
 		})
 	}))
