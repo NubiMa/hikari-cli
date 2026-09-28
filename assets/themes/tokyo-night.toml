@@ -1,0 +1,18 @@
+name = "tokyo-night"
+description = "Tokyo Night dark neon theme"
+
+[colors]
+primary     = "#7AA2F7"
+accent      = "#BB9AF7"
+dim         = "#565F89"
+subtle      = "#24283B"
+text        = "#C0CAF5"
+text_muted  = "#787C99"
+user        = "#73DACA"
+assistant   = "#BB9AF7"
+system      = "#E0AF68"
+success     = "#9ECE6A"
+error       = "#F7768E"
+warning     = "#FF9E64"
+border      = "#3B4261"
+background  = "#1A1B26"

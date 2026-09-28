@@ -1,0 +1,46 @@
+# Binaries & Executables
+hikari
+hikari.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test, coverage, and log artifacts
+*.test
+*.out
+*.log
+cover.out
+coverage.html
+system_check.log
+
+# Build output
+bin/
+dist/
+
+# Local configuration, secrets, and session data
+.env
+.env.*
+*.env
+config.toml
+*.local.toml
+sessions/
+
+# Agent skills & internal planning/run documentation
+.agents/
+skills-lock.json
+PRD.md
+HOW_TO_RUN.md
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Go workspaces
+go.work
+go.work.sum
