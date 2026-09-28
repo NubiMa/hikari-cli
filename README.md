@@ -53,6 +53,10 @@ make install
 
 ## Quick Start
 
+> 📖 **Full Guides**:
+> - [How to Run & Connect Guide](HOW_TO_RUN.md) — Step-by-step setup, commands, and troubleshooting.
+> - [Provider Connection Guide](PROVIDERS.md) — Comprehensive guide for Ollama, OpenClaw, and Hermes.
+
 ### 1. Initialize Configuration
 
 Generate default directories and a starter configuration:

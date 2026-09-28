@@ -33,10 +33,11 @@ const (
 
 // Provider implements provider.Provider for Ollama.
 type Provider struct {
-	name     string
-	cfg      config.ProviderConfig
-	client   *http.Client
-	endpoint string // normalised (no trailing slash)
+	name         string
+	cfg          config.ProviderConfig
+	client       *http.Client
+	streamClient *http.Client
+	endpoint     string // normalised (no trailing slash)
 }
 
 // New creates an OllamaProvider from a ProviderConfig.
@@ -61,11 +62,17 @@ func New(name string, cfg config.ProviderConfig) (provider.Provider, error) {
 		Transport: transport,
 	}
 
+	streamClient := &http.Client{
+		Transport: transport,
+		Timeout:   0, // streaming requests rely on the caller's context deadline
+	}
+
 	return &Provider{
-		name:     name,
-		cfg:      cfg,
-		client:   client,
-		endpoint: strings.TrimRight(cfg.Endpoint, "/"),
+		name:         name,
+		cfg:          cfg,
+		client:       client,
+		streamClient: streamClient,
+		endpoint:     strings.TrimRight(cfg.Endpoint, "/"),
 	}, nil
 }
 
@@ -193,8 +200,9 @@ type chatRequest struct {
 }
 
 type ollamaMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role     string `json:"role"`
+	Content  string `json:"content"`
+	Thinking string `json:"thinking,omitempty"`
 }
 
 // chatChunk mirrors a single streamed JSON line from Ollama.
@@ -236,7 +244,7 @@ func (p *Provider) Chat(ctx context.Context, history []provider.Message, message
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.client.Do(req)
+	resp, err := p.streamClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("ollama chat: %w", err)
 	}
@@ -252,6 +260,7 @@ func (p *Provider) Chat(ctx context.Context, history []provider.Message, message
 		defer close(events)
 		defer resp.Body.Close()
 
+		thinkingReported := false
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
 			line := scanner.Bytes()
@@ -274,6 +283,16 @@ func (p *Provider) Chat(ctx context.Context, history []provider.Message, message
 				case <-ctx.Done():
 				}
 				return
+			}
+
+			if chunk.Message.Thinking != "" && !thinkingReported {
+				thinkingReported = true
+				select {
+				case events <- provider.Event{Type: provider.EventStatus, Content: "Thinking…"}:
+				case <-ctx.Done():
+					return
+				default:
+				}
 			}
 
 			if chunk.Message.Content != "" {

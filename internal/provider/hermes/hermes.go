@@ -21,10 +21,11 @@ const defaultTimeout = 120 * time.Second
 
 // Provider implements provider.Provider for Hermes.
 type Provider struct {
-	name     string
-	cfg      config.ProviderConfig
-	client   *http.Client
-	endpoint string
+	name         string
+	cfg          config.ProviderConfig
+	client       *http.Client
+	streamClient *http.Client
+	endpoint     string
 }
 
 // New creates a HermesProvider from a ProviderConfig.
@@ -39,10 +40,11 @@ func New(name string, cfg config.ProviderConfig) (provider.Provider, error) {
 	}
 
 	return &Provider{
-		name:     name,
-		cfg:      cfg,
-		client:   &http.Client{Timeout: timeout},
-		endpoint: strings.TrimRight(cfg.Endpoint, "/"),
+		name:         name,
+		cfg:          cfg,
+		client:       &http.Client{Timeout: timeout},
+		streamClient: &http.Client{Timeout: 0},
+		endpoint:     strings.TrimRight(cfg.Endpoint, "/"),
 	}, nil
 }
 
