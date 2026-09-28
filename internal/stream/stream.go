@@ -6,8 +6,8 @@
 package stream
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/NubiMa/hikari-cli/internal/provider"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ---------------------------------------------------------------------------

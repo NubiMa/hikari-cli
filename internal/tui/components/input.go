@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/NubiMa/hikari-cli/internal/tui/commands"
 	"github.com/NubiMa/hikari-cli/internal/tui/styles"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // SubmitMsg is sent when the user presses Enter with non-empty input.

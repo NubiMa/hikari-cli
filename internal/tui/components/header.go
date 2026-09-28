@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/NubiMa/hikari-cli/internal/tui/styles"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Header renders the top bar showing the app name, active provider,

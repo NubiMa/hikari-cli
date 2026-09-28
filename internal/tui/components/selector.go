@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/NubiMa/hikari-cli/internal/tui/styles"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // SelectorItem represents a single option in a Selector.

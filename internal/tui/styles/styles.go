@@ -8,8 +8,8 @@
 package styles
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/NubiMa/hikari-cli/internal/theme"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Palette — base color tokens.

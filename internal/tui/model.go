@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/NubiMa/hikari-cli/internal/app"
 	"github.com/NubiMa/hikari-cli/internal/provider"
 	"github.com/NubiMa/hikari-cli/internal/session"
@@ -16,6 +14,8 @@ import (
 	"github.com/NubiMa/hikari-cli/internal/tui/commands"
 	"github.com/NubiMa/hikari-cli/internal/tui/components"
 	"github.com/NubiMa/hikari-cli/internal/tui/styles"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ---------------------------------------------------------------------------
