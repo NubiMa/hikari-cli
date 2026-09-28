@@ -181,7 +181,7 @@ func WriteDefault() error {
 	}
 
 	const defaultTOML = `# Hikari Configuration
-# Documentation: https://github.com/nubiv/hikari
+# Documentation: https://github.com/NubiMa/hikari-cli
 
 [default]
 provider = ""

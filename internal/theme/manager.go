@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nubiv/hikari/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/config"
 )
 
 // Manager handles discovering, switching, and retrieving color themes.

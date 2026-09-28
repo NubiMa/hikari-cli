@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nubiv/hikari/internal/config"
-	"github.com/nubiv/hikari/internal/provider"
-	"github.com/nubiv/hikari/internal/provider/ollama"
+	"github.com/NubiMa/hikari-cli/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/provider/ollama"
 )
 
 // newTestProvider creates an Ollama provider pointed at a test server.

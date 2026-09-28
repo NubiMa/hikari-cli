@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nubiv/hikari/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/config"
 )
 
 // Manager handles session persistence and lifecycle.

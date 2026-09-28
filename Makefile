@@ -1,7 +1,7 @@
 .PHONY: build run test lint clean install
 
 BINARY    := hikari
-MODULE    := github.com/nubiv/hikari
+MODULE    := github.com/NubiMa/hikari-cli
 CMD       := ./cmd/hikari
 VERSION   := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT    := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")

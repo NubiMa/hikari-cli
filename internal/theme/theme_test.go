@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nubiv/hikari/internal/theme"
+	"github.com/NubiMa/hikari-cli/internal/theme"
 )
 
 func TestThemePresets(t *testing.T) {

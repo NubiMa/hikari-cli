@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/nubiv/hikari/internal/tui/styles"
+	"github.com/NubiMa/hikari-cli/internal/tui/styles"
 )
 
 // SelectorItem represents a single option in a Selector.

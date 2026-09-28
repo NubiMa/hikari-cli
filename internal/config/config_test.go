@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nubiv/hikari/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/config"
 )
 
 func TestLoadMissingFile(t *testing.T) {

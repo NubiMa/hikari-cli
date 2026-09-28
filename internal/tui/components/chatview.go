@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nubiv/hikari/internal/provider"
-	"github.com/nubiv/hikari/internal/tui/styles"
+	"github.com/NubiMa/hikari-cli/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/tui/styles"
 )
 
 // ChatMessage is a rendered message entry in the chat view.

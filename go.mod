@@ -1,4 +1,4 @@
-module github.com/nubiv/hikari
+module github.com/NubiMa/hikari-cli
 
 go 1.24.2
 

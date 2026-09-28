@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nubiv/hikari/internal/persona"
+	"github.com/NubiMa/hikari-cli/internal/persona"
 )
 
 func TestLoadFromFile(t *testing.T) {

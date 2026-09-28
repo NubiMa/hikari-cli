@@ -3,7 +3,7 @@ package provider
 import (
 	"fmt"
 
-	"github.com/nubiv/hikari/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/config"
 )
 
 // ConstructorFn is a function that creates a Provider from a ProviderConfig.

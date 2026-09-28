@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nubiv/hikari/internal/config"
-	"github.com/nubiv/hikari/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/provider"
 )
 
 const defaultTimeout = 120 * time.Second

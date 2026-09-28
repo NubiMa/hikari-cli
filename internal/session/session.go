@@ -8,7 +8,7 @@ package session
 import (
 	"time"
 
-	"github.com/nubiv/hikari/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/provider"
 )
 
 // ---------------------------------------------------------------------------

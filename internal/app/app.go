@@ -8,15 +8,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/nubiv/hikari/internal/config"
-	"github.com/nubiv/hikari/internal/persona"
-	"github.com/nubiv/hikari/internal/provider"
-	"github.com/nubiv/hikari/internal/provider/hermes"
-	"github.com/nubiv/hikari/internal/provider/ollama"
-	"github.com/nubiv/hikari/internal/provider/openclaw"
-	"github.com/nubiv/hikari/internal/session"
-	"github.com/nubiv/hikari/internal/theme"
-	"github.com/nubiv/hikari/internal/tui/styles"
+	"github.com/NubiMa/hikari-cli/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/persona"
+	"github.com/NubiMa/hikari-cli/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/provider/hermes"
+	"github.com/NubiMa/hikari-cli/internal/provider/ollama"
+	"github.com/NubiMa/hikari-cli/internal/provider/openclaw"
+	"github.com/NubiMa/hikari-cli/internal/session"
+	"github.com/NubiMa/hikari-cli/internal/theme"
+	"github.com/NubiMa/hikari-cli/internal/tui/styles"
 )
 
 // App holds all top-level application state and dependencies.

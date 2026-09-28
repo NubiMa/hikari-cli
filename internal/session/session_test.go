@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nubiv/hikari/internal/provider"
-	"github.com/nubiv/hikari/internal/session"
+	"github.com/NubiMa/hikari-cli/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/session"
 )
 
 func TestSessionCRUD(t *testing.T) {

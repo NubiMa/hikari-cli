@@ -9,13 +9,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/nubiv/hikari/internal/app"
-	"github.com/nubiv/hikari/internal/provider"
-	"github.com/nubiv/hikari/internal/session"
-	"github.com/nubiv/hikari/internal/stream"
-	"github.com/nubiv/hikari/internal/tui/commands"
-	"github.com/nubiv/hikari/internal/tui/components"
-	"github.com/nubiv/hikari/internal/tui/styles"
+	"github.com/NubiMa/hikari-cli/internal/app"
+	"github.com/NubiMa/hikari-cli/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/session"
+	"github.com/NubiMa/hikari-cli/internal/stream"
+	"github.com/NubiMa/hikari-cli/internal/tui/commands"
+	"github.com/NubiMa/hikari-cli/internal/tui/components"
+	"github.com/NubiMa/hikari-cli/internal/tui/styles"
 )
 
 // ---------------------------------------------------------------------------

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nubiv/hikari/internal/persona"
-	"github.com/nubiv/hikari/internal/session"
-	"github.com/nubiv/hikari/internal/tui/styles"
+	"github.com/NubiMa/hikari-cli/internal/persona"
+	"github.com/NubiMa/hikari-cli/internal/session"
+	"github.com/NubiMa/hikari-cli/internal/tui/styles"
 )
 
 // Sidebar renders the contextual information panel required by PRD Section 16.

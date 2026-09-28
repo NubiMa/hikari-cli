@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nubiv/hikari/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/config"
 )
 
 // Manager holds all loaded personas and tracks the active one.

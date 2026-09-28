@@ -1,0 +1,20 @@
+# Ensure shell scripts always use LF line endings on checkout,
+# even if a contributor is on Windows. CRLF in .sh files will
+# break execution on Linux/macOS ("bad interpreter" error).
+*.sh    text eol=lf
+
+# Ensure Go source files use LF
+*.go    text eol=lf
+
+# Ensure YAML/TOML/Makefile use LF
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+Makefile text eol=lf
+
+# Treat binaries as binary (no line-ending conversion)
+*.gz    binary
+*.zip   binary
+*.tar   binary
+hikari  binary
