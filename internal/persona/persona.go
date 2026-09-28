@@ -7,6 +7,7 @@ package persona
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,24 @@ type Persona struct {
 func (p *Persona) IsBuiltin() bool { return p.source == "builtin" }
 
 // ---------------------------------------------------------------------------
-// Load
+// Load from bytes
+// ---------------------------------------------------------------------------
+
+// LoadFromBytes parses a persona from raw YAML bytes with a fallback name.
+func LoadFromBytes(data []byte, fallbackName, source string) (*Persona, error) {
+	var p Persona
+	if err := yaml.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("persona: parsing %s: %w", fallbackName, err)
+	}
+	if p.Name == "" {
+		p.Name = fallbackName
+	}
+	p.source = source
+	return &p, nil
+}
+
+// ---------------------------------------------------------------------------
+// Load from OS filesystem
 // ---------------------------------------------------------------------------
 
 // LoadFromFile reads and parses a single persona YAML file.
@@ -59,19 +77,9 @@ func LoadFromFile(path string) (*Persona, error) {
 	if err != nil {
 		return nil, fmt.Errorf("persona: reading %s: %w", path, err)
 	}
-
-	var p Persona
-	if err := yaml.Unmarshal(data, &p); err != nil {
-		return nil, fmt.Errorf("persona: parsing %s: %w", path, err)
-	}
-
-	if p.Name == "" {
-		// Fall back to filename without extension.
-		base := filepath.Base(path)
-		p.Name = strings.TrimSuffix(base, filepath.Ext(base))
-	}
-
-	return &p, nil
+	base := filepath.Base(path)
+	fallback := strings.TrimSuffix(base, filepath.Ext(base))
+	return LoadFromBytes(data, fallback, "user")
 }
 
 // LoadDir reads all *.yaml files from a directory and returns a map of
@@ -99,6 +107,42 @@ func LoadDir(dir string, source string) (map[string]*Persona, error) {
 			return nil, err
 		}
 		p.source = source
+		key := strings.ToLower(p.Name)
+		result[key] = p
+	}
+	return result, nil
+}
+
+// ---------------------------------------------------------------------------
+// Load from embed.FS
+// ---------------------------------------------------------------------------
+
+// LoadEmbedFS reads all *.yaml files from an embedded filesystem prefix and
+// returns a map of lowercase-name → Persona. Use this for bundled assets.
+func LoadEmbedFS(fsys fs.ReadDirFS, dir string, source string) (map[string]*Persona, error) {
+	entries, err := fsys.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("persona: reading embedded dir %s: %w", dir, err)
+	}
+
+	result := make(map[string]*Persona)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		data, err := fs.ReadFile(fsys, dir+"/"+name)
+		if err != nil {
+			return nil, fmt.Errorf("persona: reading embedded %s: %w", name, err)
+		}
+		fallback := strings.TrimSuffix(name, filepath.Ext(name))
+		p, err := LoadFromBytes(data, fallback, source)
+		if err != nil {
+			return nil, err
+		}
 		key := strings.ToLower(p.Name)
 		result[key] = p
 	}

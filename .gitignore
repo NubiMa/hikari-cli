@@ -1,6 +1,6 @@
-# Binaries & Executables
-hikari
-hikari.exe
+# Binaries & Executables (anchored to root to avoid matching cmd/hikari/)
+/hikari
+/hikari.exe
 *.exe
 *.exe~
 *.dll
@@ -27,11 +27,9 @@ config.toml
 *.local.toml
 sessions/
 
-# Agent skills & internal planning/run documentation
+# Internal agent/AI tooling (not part of the public project)
 .agents/
 skills-lock.json
-PRD.md
-HOW_TO_RUN.md
 
 # IDE & Editor files
 .vscode/

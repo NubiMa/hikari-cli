@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/NubiMa/hikari-cli/assets"
 	"github.com/NubiMa/hikari-cli/internal/config"
 )
 
@@ -14,26 +15,26 @@ type Manager struct {
 	active   *Persona
 }
 
-// NewManager loads personas from bundled assets (builtinDir) and user config
-// (userDir). User personas override builtin ones with the same name.
-func NewManager(builtinDir, userDir string) (*Manager, error) {
+// NewManager loads personas from the embedded assets FS (builtins) and user
+// config (userDir). User personas override builtin ones with the same name.
+func NewManager(userDir string) (*Manager, error) {
 	m := &Manager{
 		personas: make(map[string]*Persona),
 	}
 
-	// Load builtin personas first.
-	builtins, err := LoadDir(builtinDir, "builtin")
+	// Load builtin personas from the embedded filesystem.
+	builtins, err := LoadEmbedFS(assets.Personas, "personas", "builtin")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("loading builtin personas: %w", err)
 	}
 	for k, p := range builtins {
 		m.personas[k] = p
 	}
 
-	// User personas override builtins.
+	// User personas override builtins with the same name.
 	userPersonas, err := LoadDir(userDir, "user")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("loading user personas: %w", err)
 	}
 	for k, p := range userPersonas {
 		m.personas[k] = p
@@ -47,9 +48,39 @@ func NewManager(builtinDir, userDir string) (*Manager, error) {
 	return m, nil
 }
 
-// NewManagerDefault creates a Manager using standard asset and config paths.
+// NewManagerFromDirs creates a Manager from explicit builtin and user dirs,
+// bypassing the embedded assets. Intended for unit tests only.
+func NewManagerFromDirs(builtinDir, userDir string) (*Manager, error) {
+	m := &Manager{
+		personas: make(map[string]*Persona),
+	}
+
+	builtins, err := LoadDir(builtinDir, "builtin")
+	if err != nil {
+		return nil, fmt.Errorf("loading builtin personas: %w", err)
+	}
+	for k, p := range builtins {
+		m.personas[k] = p
+	}
+
+	userPersonas, err := LoadDir(userDir, "user")
+	if err != nil {
+		return nil, fmt.Errorf("loading user personas: %w", err)
+	}
+	for k, p := range userPersonas {
+		m.personas[k] = p
+	}
+
+	if len(m.personas) == 0 {
+		m.personas["default"] = defaultPersona()
+	}
+
+	return m, nil
+}
+
+// NewManagerDefault creates a Manager using the default user config directory.
 func NewManagerDefault() (*Manager, error) {
-	return NewManager("assets/personas", config.PersonasDir())
+	return NewManager(config.PersonasDir())
 }
 
 // SetActive sets the active persona by name (case-insensitive).

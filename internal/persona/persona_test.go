@@ -38,13 +38,13 @@ behavior:
 }
 
 func TestManagerDefault(t *testing.T) {
-	// Empty builtin + user dirs → should get default fallback persona
+	// Empty builtin + user dirs → should get default fallback persona.
 	builtin := t.TempDir()
 	user := t.TempDir()
 
-	mgr, err := persona.NewManager(builtin, user)
+	mgr, err := persona.NewManagerFromDirs(builtin, user)
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("NewManagerFromDirs: %v", err)
 	}
 
 	active := mgr.Active()
@@ -61,9 +61,9 @@ func TestManagerSwitch(t *testing.T) {
 	writeYAML(t, dir, "alpha.yaml", "Alpha", "First persona")
 	writeYAML(t, dir, "beta.yaml", "Beta", "Second persona")
 
-	mgr, err := persona.NewManager(dir, t.TempDir())
+	mgr, err := persona.NewManagerFromDirs(dir, t.TempDir())
 	if err != nil {
-		t.Fatalf("NewManager: %v", err)
+		t.Fatalf("NewManagerFromDirs: %v", err)
 	}
 
 	if err := mgr.SetActive("Alpha"); err != nil {
@@ -91,7 +91,7 @@ func TestManagerList(t *testing.T) {
 	writeYAML(t, dir, "beta.yaml", "Beta", "")
 	writeYAML(t, dir, "gamma.yaml", "Gamma", "")
 
-	mgr, err := persona.NewManager(dir, t.TempDir())
+	mgr, err := persona.NewManagerFromDirs(dir, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +99,24 @@ func TestManagerList(t *testing.T) {
 	names := mgr.List()
 	if len(names) != 3 {
 		t.Errorf("expected 3 personas, got %d: %v", len(names), names)
+	}
+}
+
+// TestManagerEmbedded verifies that the production NewManagerDefault loads
+// at least one builtin persona from the embedded assets.
+func TestManagerEmbedded(t *testing.T) {
+	mgr, err := persona.NewManagerDefault()
+	if err != nil {
+		t.Fatalf("NewManagerDefault: %v", err)
+	}
+	all := mgr.All()
+	if len(all) == 0 {
+		t.Fatal("expected at least one persona from embedded assets")
+	}
+	// Nino is a canonical builtin — verify it exists.
+	_, found := mgr.Get("nino")
+	if !found {
+		t.Error("expected builtin 'nino' persona to be present")
 	}
 }
 
