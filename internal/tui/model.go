@@ -392,7 +392,8 @@ func (m Model) handleCommand(msg components.CommandMsg) (tea.Model, tea.Cmd) {
 // showStatus checks health for all configured providers according to PRD Section 28.
 func (m Model) showStatus() (tea.Model, tea.Cmd) {
 	var b strings.Builder
-	b.WriteString(styles.Bold.Render("Provider Status (PRD §28)") + "\n\n")
+	b.WriteString(styles.Bold.Render("Provider Status (PRD §28)"))
+	b.WriteString("\n\n")
 
 	for _, name := range m.app.Router.AvailableNames() {
 		prov, err := m.app.Registry.Get(name)
