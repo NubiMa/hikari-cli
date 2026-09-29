@@ -139,6 +139,12 @@ func connectCmd(a *app.App) tea.Cmd {
 
 type connectedMsg struct{ err error }
 
+// streamReadyMsg is sent once a Chat() call succeeds and carries the event
+// channel back to Update() so it can be stored on the real Model value.
+// This is necessary because handleSubmit runs inside a tea.Cmd closure where
+// mutations to m are invisible to Bubble Tea.
+type streamReadyMsg struct{ ch <-chan provider.Event }
+
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
@@ -167,6 +173,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.isError = false
 		}
 		return m, nil
+
+	// -- Stream channel handoff --
+	// streamReadyMsg arrives once Chat() returns successfully. We store the
+	// channel on the real model here (inside Update) so that subsequent
+	// NextEvent calls actually read from it.
+	case streamReadyMsg:
+		m.eventCh = msg.ch
+		return m, stream.NextEvent(m.eventCh)
 
 	// -- Streaming events --
 	case stream.TokenMsg:
@@ -307,8 +321,9 @@ func (m Model) handleSubmit(text string) (tea.Model, tea.Cmd) {
 			cancel()
 			return stream.ErrorMsg{Err: err}
 		}
-		m.eventCh = ch
-		return stream.NextEvent(ch)()
+		// Return streamReadyMsg so Update() can store ch on the real Model.
+		// We must NOT touch m.eventCh here — this closure captures a copy of m.
+		return streamReadyMsg{ch: ch}
 	}
 }
 
