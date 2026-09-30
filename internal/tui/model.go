@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -364,6 +365,17 @@ func (m Model) handleCommand(msg components.CommandMsg) (tea.Model, tea.Cmd) {
 
 	case "exit":
 		return m, tea.Quit
+
+	case "update":
+		// We can't safely self-update from inside the alt-screen TUI process.
+		// Quit and re-exec with the update subcommand so it runs in a clean terminal.
+		return m, tea.ExecProcess(
+			updateExecCmd(),
+			func(err error) tea.Msg {
+				// After the update process exits, quit the TUI too.
+				return tea.QuitMsg{}
+			},
+		)
 
 	case "status":
 		return m.showStatus()
@@ -850,4 +862,20 @@ func sanitiseError(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+// updateExecCmd returns an *exec.Cmd that re-runs the current binary with the
+// "update" subcommand. Used by the /update TUI command to run the updater in
+// a clean terminal after the TUI alt-screen is released.
+func updateExecCmd() *exec.Cmd {
+	exe, err := os.Executable()
+	if err != nil {
+		// Fallback: hope hikari is on PATH
+		exe = "hikari"
+	}
+	cmd := exec.Command(exe, "update") //nolint:gosec // exe is our own binary
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
 }

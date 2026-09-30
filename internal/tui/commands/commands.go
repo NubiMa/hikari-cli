@@ -11,6 +11,7 @@ var KnownCommands = []CommandDef{
 	{Name: "clear", Description: "Clear conversation and start fresh"},
 	{Name: "home", Description: "Exit current session and return to start screen  (alias: /new)"},
 	{Name: "exit", Description: "Exit Hikari"},
+	{Name: "update", Description: "Check for updates (exits TUI and runs: hikari update)"},
 	{Name: "status", Description: "Show provider connection status (with model list for Ollama)"},
 	{Name: "log", Description: "Show the application log file path and recent entries"},
 	{Name: "provider", Description: "Switch active provider"},

@@ -95,6 +95,8 @@ Usage:
 	cmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Print version and exit")
 	cmd.Flags().BoolVar(&initFlag, "init", false, "Create default config file and exit")
 
+	cmd.AddCommand(updateCmd())
+
 	return cmd
 }
 
