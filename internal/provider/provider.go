@@ -63,7 +63,9 @@ type Model struct {
 type ProviderStatus struct {
 	Connected bool
 	Latency   time.Duration
-	Message   string // human-readable status
+	Message   string   // human-readable status
+	Details   []string // extra lines (e.g. loaded models, auth info)
+	Endpoint  string   // the URL being checked
 }
 
 // ---------------------------------------------------------------------------

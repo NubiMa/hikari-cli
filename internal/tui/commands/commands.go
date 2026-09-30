@@ -9,8 +9,10 @@ package commands
 var KnownCommands = []CommandDef{
 	{Name: "help", Description: "Show available commands"},
 	{Name: "clear", Description: "Clear conversation and start fresh"},
+	{Name: "home", Description: "Exit current session and return to start screen  (alias: /new)"},
 	{Name: "exit", Description: "Exit Hikari"},
-	{Name: "status", Description: "Show provider connection status"},
+	{Name: "status", Description: "Show provider connection status (with model list for Ollama)"},
+	{Name: "log", Description: "Show the application log file path and recent entries"},
 	{Name: "provider", Description: "Switch active provider"},
 	{Name: "model", Description: "Switch active model"},
 	{Name: "persona", Description: "Switch active persona"},

@@ -7,6 +7,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/NubiMa/hikari-cli/internal/config"
 	"github.com/NubiMa/hikari-cli/internal/persona"
@@ -27,6 +30,8 @@ type App struct {
 	Personas *persona.Manager
 	Sessions *session.Manager
 	Themes   *theme.Manager
+	Logger   *log.Logger // structured file logger
+	LogPath  string      // absolute path to the log file
 }
 
 // New initialises the full application stack:
@@ -89,6 +94,19 @@ func New() (*App, error) {
 	}
 	styles.ApplyTheme(themes.Active())
 
+	// -- Logger --
+	logDir := filepath.Join(config.Dir(), "logs")
+	if err := os.MkdirAll(logDir, 0700); err != nil {
+		return nil, fmt.Errorf("creating log dir: %w", err)
+	}
+	logPath := filepath.Join(logDir, "hikari.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("opening log file: %w", err)
+	}
+	logger := log.New(logFile, "", log.LstdFlags)
+	logger.Printf("hikari started")
+
 	return &App{
 		Config:   cfg,
 		Registry: registry,
@@ -96,6 +114,8 @@ func New() (*App, error) {
 		Personas: personas,
 		Sessions: sessions,
 		Themes:   themes,
+		Logger:   logger,
+		LogPath:  logPath,
 	}, nil
 }
 

@@ -110,7 +110,27 @@ func (p *Provider) Connect(ctx context.Context) error {
 // Close is a no-op for Ollama (stateless HTTP).
 func (p *Provider) Close() error { return nil }
 
-// Status returns the health of the Ollama connection.
+// simplifyNetErr strips verbose Go net error wrappers to a user-friendly message.
+func simplifyNetErr(err error) string {
+	if err == nil {
+		return ""
+	}
+	s := err.Error()
+	// connection refused is the most common "server not running" error
+	if strings.Contains(s, "connection refused") {
+		return "connection refused (is Ollama running?)"
+	}
+	if strings.Contains(s, "no such host") {
+		return "hostname not found (check endpoint in config)"
+	}
+	if strings.Contains(s, "timeout") || strings.Contains(s, "deadline exceeded") {
+		return "timed out (server slow or unreachable)"
+	}
+	return s
+}
+
+// Status returns the health of the Ollama connection, including the list of
+// locally available models so the user can verify Ollama is actually serving.
 func (p *Provider) Status(ctx context.Context) (provider.ProviderStatus, error) {
 	start := time.Now()
 
@@ -123,23 +143,55 @@ func (p *Provider) Status(ctx context.Context) (provider.ProviderStatus, error) 
 	if err != nil {
 		return provider.ProviderStatus{
 			Connected: false,
-			Message:   err.Error(),
+			Endpoint:  p.endpoint,
+			Message:   "cannot reach server: " + simplifyNetErr(err),
+			Details:   []string{"Start Ollama with:  ollama serve"},
 		}, nil
 	}
 	defer resp.Body.Close()
 
 	latency := time.Since(start)
-	if resp.StatusCode == http.StatusOK {
+	if resp.StatusCode != http.StatusOK {
 		return provider.ProviderStatus{
-			Connected: true,
+			Connected: false,
 			Latency:   latency,
-			Message:   "connected",
+			Endpoint:  p.endpoint,
+			Message:   fmt.Sprintf("HTTP %d from server", resp.StatusCode),
 		}, nil
 	}
+
+	// Decode the model list to show what's actually available.
+	var tags tagsResponse
+	details := []string{}
+	if decErr := json.NewDecoder(resp.Body).Decode(&tags); decErr == nil {
+		if len(tags.Models) == 0 {
+			details = append(details, "No models pulled yet — run:  ollama pull <model>")
+		} else {
+			details = append(details, fmt.Sprintf("%d model(s) available:", len(tags.Models)))
+			for _, m := range tags.Models {
+				details = append(details, fmt.Sprintf("  • %s", m.Name))
+			}
+		}
+		if p.cfg.Model != "" {
+			found := false
+			for _, m := range tags.Models {
+				if m.Name == p.cfg.Model {
+					found = true
+					break
+				}
+			}
+			if !found {
+				details = append(details, fmt.Sprintf("⚠  Configured model %q not found — run:  ollama pull %s", p.cfg.Model, p.cfg.Model))
+			}
+		}
+	}
+
 	return provider.ProviderStatus{
-		Connected: false,
+		Connected: true,
 		Latency:   latency,
-		Message:   fmt.Sprintf("HTTP %d", resp.StatusCode),
+		Endpoint:  p.endpoint,
+		Message:   "online",
+		Details:   details,
 	}, nil
 }
 

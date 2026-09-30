@@ -91,14 +91,54 @@ func (p *Provider) Status(ctx context.Context) (provider.ProviderStatus, error) 
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return provider.ProviderStatus{Connected: false, Message: err.Error()}, nil
+		msg := err.Error()
+		details := []string{"Make sure the Hermes server is running and the endpoint is correct."}
+		if strings.Contains(msg, "connection refused") {
+			msg = "connection refused (is Hermes running?)"
+		} else if strings.Contains(msg, "no such host") {
+			msg = "hostname not found (check endpoint in config)"
+		} else if strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline exceeded") {
+			msg = "timed out (server slow or unreachable)"
+		}
+		return provider.ProviderStatus{
+			Connected: false,
+			Endpoint:  p.endpoint,
+			Message:   msg,
+			Details:   details,
+		}, nil
 	}
 	defer resp.Body.Close()
 
+	latency := time.Since(start)
+	details := []string{fmt.Sprintf("HTTP %d from %s/health", resp.StatusCode, p.endpoint)}
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		details = append(details, "Authentication failed — check your token in config.toml")
+		return provider.ProviderStatus{
+			Connected: false, Latency: latency, Endpoint: p.endpoint,
+			Message: "auth failed (HTTP 401)", Details: details,
+		}, nil
+	case resp.StatusCode == http.StatusForbidden:
+		details = append(details, "Access denied — your token may not have the required permissions")
+		return provider.ProviderStatus{
+			Connected: false, Latency: latency, Endpoint: p.endpoint,
+			Message: "forbidden (HTTP 403)", Details: details,
+		}, nil
+	case resp.StatusCode >= 400:
+		return provider.ProviderStatus{
+			Connected: false, Latency: latency, Endpoint: p.endpoint,
+			Message: fmt.Sprintf("server error (HTTP %d)", resp.StatusCode), Details: details,
+		}, nil
+	}
+
+	hasToken := p.cfg.Token != ""
+	details = append(details, fmt.Sprintf("Auth token configured: %v", hasToken))
 	return provider.ProviderStatus{
-		Connected: resp.StatusCode < 400,
-		Latency:   time.Since(start),
-		Message:   fmt.Sprintf("HTTP %d", resp.StatusCode),
+		Connected: true,
+		Latency:   latency,
+		Endpoint:  p.endpoint,
+		Message:   "online",
+		Details:   details,
 	}, nil
 }
 

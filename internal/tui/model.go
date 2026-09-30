@@ -4,6 +4,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -379,6 +380,12 @@ func (m Model) handleCommand(msg components.CommandMsg) (tea.Model, tea.Cmd) {
 	case "session", "history":
 		return m.openSessionSelector()
 
+	case "home", "new":
+		return m.homeSession()
+
+	case "log":
+		return m.showLog()
+
 	case "theme":
 		return m.openThemeSelector()
 
@@ -389,10 +396,10 @@ func (m Model) handleCommand(msg components.CommandMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// showStatus checks health for all configured providers according to PRD Section 28.
+// showStatus checks health for all configured providers with rich diagnostics.
 func (m Model) showStatus() (tea.Model, tea.Cmd) {
 	var b strings.Builder
-	b.WriteString(styles.Bold.Render("Provider Status (PRD §28)"))
+	b.WriteString(styles.Bold.Render("Provider Status"))
 	b.WriteString("\n\n")
 
 	for _, name := range m.app.Router.AvailableNames() {
@@ -400,28 +407,121 @@ func (m Model) showStatus() (tea.Model, tea.Cmd) {
 		if err != nil {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		status, err := prov.Status(ctx)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		status, statusErr := prov.Status(ctx)
 		cancel()
 
 		caps := prov.Capabilities()
-		dot := styles.ProviderConnected.Render("● Connected")
-		if err != nil || !status.Connected {
-			dot = styles.ProviderDisconnected.Render("○ Offline")
+
+		// Status dot + label
+		var statusLabel string
+		if statusErr != nil || !status.Connected {
+			statusLabel = styles.ProviderDisconnected.Render("○ Offline")
+		} else {
+			statusLabel = styles.ProviderConnected.Render("● Online")
 		}
 
 		latencyStr := ""
 		if status.Latency > 0 {
-			latencyStr = fmt.Sprintf("(%dms)", status.Latency.Milliseconds())
+			latencyStr = fmt.Sprintf("  %dms", status.Latency.Milliseconds())
 		}
 
-		b.WriteString(fmt.Sprintf("  %-16s %s %s\n", name, dot, styles.Muted.Render(latencyStr)))
-		b.WriteString(fmt.Sprintf("    %s\n", styles.Muted.Render(
-			fmt.Sprintf("Streaming: %v  ·  Tools: %v  ·  Memory: %v  ·  Agent: %v",
-				caps.Streaming, caps.ToolCalling, caps.Memory, caps.AgentExecution))))
+		// Header line: name + status + latency
+		b.WriteString(fmt.Sprintf("  %-16s %s%s\n", styles.Bold.Render(name), statusLabel, styles.Muted.Render(latencyStr)))
+
+		// Endpoint
+		if status.Endpoint != "" {
+			b.WriteString(styles.Muted.Render(fmt.Sprintf("    Endpoint: %s\n", status.Endpoint)))
+		}
+
+		// Status message
+		if status.Message != "" {
+			b.WriteString(styles.Muted.Render(fmt.Sprintf("    Status:   %s\n", status.Message)))
+		}
+
+		// Detailed diagnostic lines (models list, auth hints, etc.)
+		for _, d := range status.Details {
+			b.WriteString(styles.Muted.Render("    " + d + "\n"))
+		}
+
+		// Capabilities summary
+		b.WriteString(styles.Muted.Render(fmt.Sprintf(
+			"    Caps:     streaming=%v  tools=%v  memory=%v  agent=%v\n",
+			caps.Streaming, caps.ToolCalling, caps.Memory, caps.AgentExecution)))
+		b.WriteString("\n")
 	}
 
 	m.chatView.AddMessage(provider.RoleSystem, "Hikari", b.String())
+	return m, nil
+}
+
+// showLog displays the path to the log file and the last few entries.
+func (m Model) showLog() (tea.Model, tea.Cmd) {
+	var b strings.Builder
+	b.WriteString(styles.Bold.Render("Application Log"))
+	b.WriteString("\n\n")
+
+	logPath := m.app.LogPath
+	b.WriteString(styles.Muted.Render("Log file: " + logPath))
+	b.WriteString("\n\n")
+
+	// Read the last ~20 lines of the log for quick inspection.
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		b.WriteString(styles.Muted.Render("(could not read log file: " + err.Error() + ")"))
+	} else {
+		lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+		const tail = 20
+		if len(lines) > tail {
+			b.WriteString(styles.Muted.Render(fmt.Sprintf("(showing last %d of %d lines)\n\n", tail, len(lines))))
+			lines = lines[len(lines)-tail:]
+		}
+		for _, l := range lines {
+			b.WriteString(l)
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(styles.Muted.Render("Tip: tail -f " + logPath + "  to monitor live"))
+
+	m.chatView.AddMessage(provider.RoleSystem, "Hikari", b.String())
+	if m.app.Logger != nil {
+		m.app.Logger.Printf("user ran /log")
+	}
+	return m, nil
+}
+
+// homeSession discards the current session and starts a fresh one,
+// effectively returning the user to the "home" / welcome screen.
+func (m Model) homeSession() (tea.Model, tea.Cmd) {
+	if m.isStreaming && m.eventCancel != nil {
+		m.eventCancel()
+		m.isStreaming = false
+		m.input.SetDisabled(false)
+	}
+
+	newSess, err := m.app.NewSession()
+	if err != nil {
+		m.statusMsg = "Could not create new session: " + sanitiseError(err)
+		m.isError = true
+		return m, nil
+	}
+
+	m.session = newSess
+	m.chatView.ClearMessages()
+	m.statusMsg = ""
+	m.isError = false
+
+	// Show greeting for the active persona on the fresh session.
+	persona := m.app.Personas.Active()
+	if persona.Greeting != "" {
+		m.chatView.AddMessage(provider.RoleAssistant, persona.Name, persona.Greeting)
+	}
+
+	if m.app.Logger != nil {
+		m.app.Logger.Printf("user returned home (new session %s)", newSess.ID)
+	}
 	return m, nil
 }
 
