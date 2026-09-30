@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -92,20 +93,35 @@ func fetchLatestRelease() (*ghRelease, error) {
 // ---------------------------------------------------------------------------
 
 func platformSuffix() string {
-	os_ := runtime.GOOS
+	goos := runtime.GOOS
 	arch := runtime.GOARCH
-	// normalise to the naming convention used by GoReleaser
-	if arch == "amd64" {
-		arch = "amd64"
+	switch arch {
+	case "amd64":
+		// already correct
+	case "arm64":
+		// already correct
+	case "arm":
+		arch = "armv7"
+	case "386":
+		arch = "386"
 	}
-	return fmt.Sprintf("%s_%s", os_, arch)
+	return fmt.Sprintf("%s_%s", goos, arch)
 }
 
-// tarballName returns the expected release asset filename for the current
-// platform, e.g. hikari_1.2.3_linux_amd64.tar.gz
-func tarballName(tag string) string {
+// archiveExt returns the file extension used for release archives.
+// Windows releases use .zip; everything else uses .tar.gz.
+func archiveExt() string {
+	if runtime.GOOS == "windows" {
+		return ".zip"
+	}
+	return ".tar.gz"
+}
+
+// assetName returns the expected release asset filename for the current platform,
+// e.g. hikari_1.2.3_linux_amd64.tar.gz or hikari_1.2.3_windows_amd64.zip
+func assetName(tag string) string {
 	v := strings.TrimPrefix(tag, "v")
-	return fmt.Sprintf("%s_%s_%s.tar.gz", updateBinary, v, platformSuffix())
+	return fmt.Sprintf("%s_%s_%s%s", updateBinary, v, platformSuffix(), archiveExt())
 }
 
 // ---------------------------------------------------------------------------
@@ -144,8 +160,9 @@ func downloadAndReplace(assetURL string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	tarPath := filepath.Join(tmpDir, "update.tar.gz")
-	f, err := os.Create(tarPath)
+	archive := archiveExt()
+	archivePath := filepath.Join(tmpDir, "update"+archive)
+	f, err := os.Create(archivePath)
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
@@ -155,8 +172,8 @@ func downloadAndReplace(assetURL string) error {
 	}
 	f.Close()
 
-	// Extract the binary from the tarball.
-	binPath, err := extractBinary(tarPath, tmpDir)
+	// Extract the binary from the archive.
+	binPath, err := extractBinary(archivePath, tmpDir)
 	if err != nil {
 		return fmt.Errorf("extracting binary: %w", err)
 	}
@@ -183,41 +200,35 @@ func downloadAndReplace(assetURL string) error {
 	return nil
 }
 
-// extractBinary untars the archive at tarPath and returns the path of the
-// extracted hikari binary inside destDir.
-func extractBinary(tarPath, destDir string) (string, error) {
-	// We use the system tar command to avoid importing a tar dependency.
-	// This works on Linux, macOS, and Git Bash / WSL on Windows.
+// extractBinary unpacks the archive at archivePath and returns the path of
+// the extracted hikari binary inside destDir.
+func extractBinary(archivePath, destDir string) (string, error) {
 	outDir := filepath.Join(destDir, "extracted")
 	if err := os.MkdirAll(outDir, 0700); err != nil {
 		return "", err
 	}
 
-	// #nosec G204 — tarPath and outDir are controlled by us
-	cmd := tarCmd(tarPath, outDir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("tar: %w\n%s", err, out)
+	if filepath.Ext(archivePath) == ".zip" {
+		// Windows: use PowerShell to extract the zip
+		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", //nolint:gosec
+			"-Command", fmt.Sprintf("Expand-Archive -Force -Path '%s' -DestinationPath '%s'", archivePath, outDir))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("powershell unzip: %w\n%s", err, out)
+		}
+	} else {
+		// Linux / macOS: use system tar
+		cmd := tarCmd(archivePath, outDir)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("tar: %w\n%s", err, out)
+		}
 	}
 
-	// Find the binary inside the extracted directory.
 	binName := updateBinary
 	if runtime.GOOS == "windows" {
 		binName += ".exe"
 	}
-	candidates := []string{
-		filepath.Join(outDir, binName),
-		filepath.Join(outDir, updateBinary+"_*", binName),
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			if err := os.Chmod(c, 0755); err != nil { //nolint:gosec // binary needs execute bit
-				return "", err
-			}
-			return c, nil
-		}
-	}
 
-	// Fall back: walk the extracted dir and find the binary by name.
+	// Walk the extracted directory to find the binary.
 	var found string
 	_ = filepath.WalkDir(outDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -272,7 +283,7 @@ func runUpdate(checkOnly bool) error {
 	}
 
 	// Find the asset for this platform.
-	want := tarballName(latest)
+	want := assetName(latest)
 	var downloadURL string
 	for _, a := range rel.Assets {
 		if a.Name == want {
@@ -284,8 +295,13 @@ func runUpdate(checkOnly bool) error {
 	if downloadURL == "" {
 		// No prebuilt binary — fall back to pointing the user at install.sh
 		fmt.Printf("\nNo prebuilt binary found for %s (%s).\n", want, platformSuffix())
-		fmt.Println("You can update from source by running:")
-		fmt.Printf("  curl -fsSL https://raw.githubusercontent.com/%s/main/scripts/install.sh | sh\n", updateRepo)
+		if runtime.GOOS == "windows" {
+			fmt.Println("Please download the .zip from:")
+			fmt.Printf("  https://github.com/%s/releases/latest\n", updateRepo)
+		} else {
+			fmt.Println("You can update from source by running:")
+			fmt.Printf("  curl -fsSL https://raw.githubusercontent.com/%s/main/scripts/install.sh | sh\n", updateRepo)
+		}
 		return nil
 	}
 
