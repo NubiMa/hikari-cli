@@ -189,7 +189,7 @@ func downloadAndReplace(assetURL string) error {
 	if err := os.Rename(exe, oldPath); err != nil {
 		return fmt.Errorf("backing up current binary: %w", err)
 	}
-	if err := os.Rename(binPath, exe); err != nil {
+	if err := moveOrCopy(binPath, exe); err != nil {
 		// Try to restore
 		_ = os.Rename(oldPath, exe)
 		return fmt.Errorf("replacing binary: %w", err)
@@ -197,6 +197,49 @@ func downloadAndReplace(assetURL string) error {
 	// Remove backup
 	_ = os.Remove(oldPath)
 
+	return nil
+}
+
+// moveOrCopy moves src to dst. If src and dst reside on different filesystems,
+// os.Rename fails with EXDEV ("invalid cross-device link"). In that case, it
+// falls back to copying file contents and permissions, then removes src.
+func moveOrCopy(src, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+
+	sf, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sf.Close()
+
+	fi, err := sf.Stat()
+	if err != nil {
+		return err
+	}
+
+	df, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fi.Mode().Perm())
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(df, sf); err != nil {
+		df.Close()
+		_ = os.Remove(dst)
+		return err
+	}
+
+	if err := df.Close(); err != nil {
+		_ = os.Remove(dst)
+		return err
+	}
+
+	if err := os.Chmod(dst, fi.Mode().Perm()); err != nil {
+		return err
+	}
+
+	_ = os.Remove(src)
 	return nil
 }
 
