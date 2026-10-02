@@ -42,3 +42,7 @@ skills-lock.json
 # Go workspaces
 go.work
 go.work.sum
+
+# Local documentation & drafts
+/PRD.md
+/HOW_TO_RUN.md

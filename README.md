@@ -11,7 +11,7 @@
 
 > **One terminal platform, unlimited AI personalities.**
 
-Hikari is an open-source, terminal-native AI platform written in Go. It provides a unified TUI, CLI, and Unix-style pipe interface for interacting with multiple AI backends—including **Ollama, OpenClaw, and Hermes**—running either locally or on remote servers/VPS.
+Hikari is an open-source, terminal-native AI platform written in Go. It provides a unified TUI, CLI, and Unix-style pipe interface for interacting with multiple AI backends—including **Ollama, OpenClaw, and Hermes**—running either locally or on remote servers/VPS. Cross-platform support for **Linux**, **Windows**, and **macOS**.
 
 Hikari acts as the shell and orchestration layer, leaving AI processing to your chosen backend.
 
@@ -27,19 +27,39 @@ Hikari acts as the shell and orchestration layer, leaving AI processing to your 
 - 🎨 **Theming & ASCII Art**: Fully customisable TOML themes and ASCII art banners (`Default Violet`, `Minimal`, `Tokyo Night`).
 - 📜 **Session Persistence & History**: Automatically saves conversations with date grouping and resume support.
 - 🔒 **Security-First**: Token overrides via environment variables (`HIKARI_<PROVIDER>_TOKEN`) and credential sanitisation in terminal logs.
+- 🔄 **Built-in Auto-Updater**: Update to the latest release with a single command (`hikari update`).
 
 ---
 
 ## Installation
 
-### One-Line Install (Linux / macOS)
+### One-Line Install
 
+#### Linux & macOS
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NubiMa/hikari-cli/main/scripts/install.sh | sh
 ```
 
-### From Source
+#### Windows (PowerShell)
+Open PowerShell (either as Administrator or regular user) and run:
+```powershell
+irm https://raw.githubusercontent.com/NubiMa/hikari-cli/main/scripts/install.ps1 | iex
+```
+*(Alternatively: `iwr -useb https://raw.githubusercontent.com/NubiMa/hikari-cli/main/scripts/install.ps1 | iex`)*
 
+This downloads the latest release binary for your architecture (`x86_64` / `arm64`), installs it to `%LOCALAPPDATA%\Programs\hikari`, and adds it to your user `PATH`.
+
+---
+
+### Prebuilt Binaries
+Download archives directly for your OS and architecture from the [GitHub Releases](https://github.com/NubiMa/hikari-cli/releases) page:
+- **Linux**: `hikari_<version>_linux_amd64.tar.gz` / `arm64`
+- **Windows**: `hikari_<version>_windows_amd64.zip` / `arm64`
+- **macOS**: `hikari_<version>_darwin_amd64.tar.gz` / `arm64` (Apple Silicon)
+
+---
+
+### Build From Source
 Requires [Go](https://go.dev/) 1.24+:
 
 ```bash
@@ -51,206 +71,239 @@ make install
 
 ---
 
+### Keeping Hikari Updated
+Hikari includes a built-in self-updater. Check for updates and automatically upgrade in place:
+```bash
+hikari update
+```
+
+---
+
 ## Quick Start
 
-> 📖 **Full Guides**:
-> - [How to Run & Connect Guide](HOW_TO_RUN.md) — Step-by-step setup, commands, and troubleshooting.
-> - [Provider Connection Guide](PROVIDERS.md) — Comprehensive guide for Ollama, OpenClaw, and Hermes.
-
 ### 1. Initialize Configuration
-
-Generate default directories and a starter configuration:
-
+Generate the default directory structure and a starter configuration file:
 ```bash
 hikari --init
 ```
 
-This creates `~/.config/hikari/config.toml` (or `%APPDATA%\hikari\config.toml` on Windows).
+Configuration files are located at:
+- **Linux & macOS**: `~/.config/hikari/config.toml`
+- **Windows**: `%APPDATA%\hikari\config.toml` (e.g. `C:\Users\<User>\AppData\Roaming\hikari\config.toml`)
 
-### 2. Connect Your AI Provider
+---
 
-Hikari connects to both **local** and **remote** AI backends. Add your provider to `~/.config/hikari/config.toml`:
+## 🔌 How to Connect Your AI Backend
 
+Hikari connects to both **Model Providers** (inference/LLMs) and **Agent Providers** (autonomous workflows with tool/command execution).
+
+For full details, see the [Provider Connection Guide (PROVIDERS.md)](PROVIDERS.md).
+
+### 1. Connecting to Ollama (Local Workstation)
+
+[Ollama](https://ollama.com/) runs open-source models (like Llama 3, Qwen 2.5, DeepSeek, Mistral) locally with zero API cost and complete privacy.
+
+#### Step 1: Start Ollama and verify it is running
+```bash
+# Verify Ollama service is reachable
+curl -s http://127.0.0.1:11434/api/tags
+
+# If not running, start Ollama:
+ollama serve
+
+# Pull your preferred model (e.g. llama3.2, qwen2.5:7b, qwen2.5-coder:7b):
+ollama pull llama3.2
+```
+
+#### Step 2: Configure `config.toml`
+Open `~/.config/hikari/config.toml` (or `%APPDATA%\hikari\config.toml` on Windows) and set:
 ```toml
 [default]
 provider = "ollama-local"
 persona  = "nino"
 model    = "llama3.2"
 
-# ── Option A: Ollama (Local Workstation) ──
 [providers.ollama-local]
-type     = "ollama"
-endpoint = "http://127.0.0.1:11434"
-model    = "llama3.2"
-
-# ── Option B: Ollama (Remote VPS / LAN) ──
-[providers.ollama-vps]
 type            = "ollama"
-endpoint        = "https://ollama.example.com"
-model           = "qwen2.5-coder:7b"
-timeout_seconds = 180
-
-# ── Option C: OpenClaw (Autonomous Agent Backend) ──
-[providers.openclaw-vps]
-type            = "openclaw"
-endpoint        = "https://agent.example.com"
-token           = ""  # Or export HIKARI_OPENCLAW_VPS_TOKEN
-
-# ── Option D: Hermes (Agent Backend) ──
-[providers.hermes-local]
-type            = "hermes"
-endpoint        = "http://127.0.0.1:8080"
-token           = ""  # Or export HIKARI_HERMES_LOCAL_TOKEN
+endpoint        = "http://127.0.0.1:11434"
+model           = "llama3.2"
+timeout_seconds = 120
 ```
 
 ---
 
-## 🔌 Connecting API Providers
+### 2. Connecting to Ollama (Remote VPS / LAN)
 
-Hikari supports two provider categories:
-- **Model Providers (Ollama)**: Focus on high-speed inference, real-time token streaming, and offline privacy.
-- **Agent Providers (OpenClaw, Hermes)**: Autonomous backends supporting tool execution, shell commands, filesystem access, and persistent agent memory.
+If your GPU server or workstation runs Ollama remotely:
 
-### 1. Ollama (Local or Remote VPS)
-
-[Ollama](https://ollama.com/) runs open-source LLMs locally or self-hosted on your private server.
-
-#### A. Local Setup (Default)
-1. Install and start Ollama:
-   ```bash
-   curl -fsSL https://ollama.com/install.sh | sh
-   ollama serve
-   ollama pull llama3.2
-   ```
-2. Configure in `config.toml`:
+1. **Configure Ollama to accept remote connections**:
+   Set `OLLAMA_HOST=0.0.0.0:11434` when launching Ollama on the server.
+2. **Configure in Hikari**:
    ```toml
-   [providers.ollama-local]
-   type     = "ollama"
-   endpoint = "http://127.0.0.1:11434"
-   model    = "llama3.2"
-   ```
+   [default]
+   provider = "ollama-vps"
 
-#### B. Remote VPS Setup
-If Ollama is hosted on a remote server or GPU VPS:
-1. Ensure Ollama listens externally: `OLLAMA_HOST=0.0.0.0:11434 ollama serve`
-2. Add to `config.toml`:
-   ```toml
    [providers.ollama-vps]
    type            = "ollama"
-   endpoint        = "https://ollama.my-server.com"
-   model           = "llama3.2"
+   endpoint        = "https://ollama.yourdomain.com" # or http://192.168.1.100:11434
+   model           = "qwen2.5-coder:7b"
    timeout_seconds = 180
-   tls_skip_verify = false  # Set to true if using self-signed TLS certs
+   tls_skip_verify = false # Set true only if using self-signed certs
    ```
-3. Dynamically browse and switch models in the TUI using `/model`.
 
 ---
 
-### 2. OpenClaw (Agent Provider)
+### 3. Connecting to OpenClaw (Autonomous Agent Provider)
 
-[OpenClaw](https://github.com/) is an autonomous agent gateway capable of executing tools, running shell commands, and accessing remote workspaces.
+[OpenClaw](https://github.com/) is an autonomous agent backend supporting tool execution, shell commands, filesystem access, and persistent memory.
 
 Configure in `config.toml`:
 ```toml
+[default]
+provider = "openclaw-vps"
+persona  = "sysadmin"
+
 [providers.openclaw-vps]
 type            = "openclaw"
-endpoint        = "https://agent.my-vps.com"
-token           = ""  # Best practice: use env variable below
+endpoint        = "https://agent.yourdomain.com"
+token           = ""  # Optional in file; recommended via environment variable
 timeout_seconds = 180
 ```
 
 #### Secure Token Injection
-Avoid committing plaintext API keys to your dotfiles. Export the token in your shell:
+To keep secrets out of plaintext config files, export the environment variable:
 ```bash
-export HIKARI_OPENCLAW_VPS_TOKEN="sk-claw-xxxxxxxxxxxxxxxxxxxx"
+# Linux / macOS:
+export HIKARI_OPENCLAW_VPS_TOKEN="sk-claw-your-token-here"
+
+# Windows (PowerShell):
+$env:HIKARI_OPENCLAW_VPS_TOKEN="sk-claw-your-token-here"
 ```
-Hikari automatically maps `HIKARI_<NAME>_TOKEN` to `[providers.<name>]` and scrubs sensitive credentials from logs.
+Hikari automatically maps `HIKARI_<PROVIDER_NAME>_TOKEN` to the matching provider and redacts credentials from logs.
 
 ---
 
-### 3. Hermes (Agent Provider)
+### 4. Connecting to Hermes (Agent Provider)
 
-[Hermes](https://github.com/) powers multi-turn agent workflows and function calling pipelines.
+[Hermes](https://github.com/) powers multi-turn agent pipelines, tool calling, and planning.
 
-Configure in `config.toml`:
-```toml
-[providers.hermes-local]
-type            = "hermes"
-endpoint        = "http://127.0.0.1:8080"
-timeout_seconds = 120
-```
+1. **Verify Hermes is reachable**:
+   ```bash
+   curl -s http://127.0.0.1:8080/health
+   ```
+2. **Configure in `config.toml`**:
+   ```toml
+   [default]
+   provider = "hermes-local"
+   persona  = "developer"
 
-For authenticated instances, export:
-```bash
-export HIKARI_HERMES_LOCAL_TOKEN="your-token"
-```
-
----
-
-### 4. Switching Providers at Runtime
-
-You can switch between backends instantly without restarting:
-- **CLI Flag**: `hikari --provider openclaw-vps "Audit codebase"`
-- **TUI Modal**: Press `Enter` on `/provider` to open the interactive picker.
-- **Provider Status**: Type `/status` in the TUI to view latency and active capability flags.
-
-> 📖 **Need more details?** Read the complete [Provider Guide (PROVIDERS.md)](PROVIDERS.md) for in-depth setup steps, reverse proxy configurations, capability matrices, and troubleshooting.
+   [providers.hermes-local]
+   type            = "hermes"
+   endpoint        = "http://127.0.0.1:8080"
+   token           = ""
+   timeout_seconds = 120
+   ```
+   Or export `HIKARI_HERMES_LOCAL_TOKEN="your-token"`.
 
 ---
 
-### 3. Launch Hikari
+## 🚀 Running Hikari
 
-#### Interactive TUI
+Hikari offers 3 distinct execution modes:
+
+### Mode 1: Interactive TUI Dashboard
+Launch the Bubble Tea interactive dashboard:
 ```bash
 hikari
 ```
 
-#### One-Shot Command
+- Type your message and hit `Enter` to send.
+- Use `Ctrl+C` to cancel an in-flight response.
+- Use `Tab` to toggle sidebar panels.
+- Scroll history with `PageUp` / `PageDown`.
+- Type `/help` to see all slash commands.
+
+### Mode 2: CLI One-Shot Command
+Execute a prompt directly from your shell, stream the response to stdout, and exit:
 ```bash
+# Basic query
 hikari "Explain the difference between a goroutine and an OS thread"
+
+# Override provider or model on the fly
+hikari --provider ollama-local --model qwen2.5-coder:7b "Write a Go HTTP handler"
+
+# Override active persona
+hikari --persona sysadmin "How do I check open ports on Linux?"
+
+# Disable streaming (wait for complete response)
+hikari --no-stream "Generate a regex for RFC 5322 email validation"
 ```
 
-#### Unix Pipeline
+### Mode 3: Unix Pipeline Integration
+Pipe outputs from commands, logs, or files directly into Hikari:
 ```bash
-git diff | hikari "Review these changes for bugs and performance issues"
-cat /var/log/nginx/error.log | hikari "Diagnose the root cause of these 502 errors"
+# Code review
+git diff | hikari "Review these changes for potential bugs or security issues"
+
+# Log troubleshooting
+journalctl -u nginx -n 50 | hikari "Diagnose the root cause of these errors"
+
+# File summarization
+cat go.mod | hikari "Explain the purpose of the primary dependencies here"
 ```
 
 ---
 
-## TUI Keyboard Shortcuts & Commands
+## ⌨️ TUI Keyboard Shortcuts & Slash Commands
 
-### In-Chat Commands
-
-Type commands directly in the prompt starting with `/`:
+### In-Chat Slash Commands
+Type commands directly into the prompt bar starting with `/`:
 
 | Command | Action |
 |---|---|
 | `/help` | Display list of internal commands |
 | `/provider` | Open interactive provider selector modal |
-| `/persona` | Open interactive persona selector modal |
-| `/model` | List and select available models for active provider |
+| `/persona` | Open interactive persona selector modal (`nino`, `developer`, `sysadmin`) |
+| `/model` | List and select available models from the active provider |
 | `/theme` | Switch color theme (`default`, `minimal`, `tokyo-night`) |
-| `/session` / `/history` | Browse past sessions grouped by date and resume |
-| `/status` | View provider connection latency and capability flags |
+| `/session` / `/history` | Browse past sessions grouped by date and resume conversation |
+| `/status` | View provider connection latency, endpoint, and capabilities |
 | `/clear` | Clear chat screen and restart conversation |
 | `/exit` | Exit Hikari |
 
 ### Keybindings
-
 - `Enter`: Send message
 - `Ctrl+C`: Cancel streaming response or exit Hikari
 - `Ctrl+L`: Clear conversation view
 - `PageUp` / `PageDown`: Scroll through message history
-- `Esc` / `Ctrl+C`: Close modal selector
+- `Esc` / `Ctrl+C`: Close open modal selector
 
 ---
 
-## Customization
+## 🛠️ Common Errors & Troubleshooting
+
+### 1. `Error: default provider "ollama-local" is not defined in [providers]`
+- **Cause**: In `config.toml`, `[default] provider = "ollama-local"` is set, but the `[providers.ollama-local]` block is missing or commented out.
+- **Fix**: Open `config.toml` and ensure `[providers.ollama-local]` is defined with `type = "ollama"` and `endpoint = "http://127.0.0.1:11434"`.
+
+### 2. `Error: connecting to provider: ollama connect: cannot reach http://127.0.0.1:11434`
+- **Cause**: Ollama is not running on your machine.
+- **Fix**: Start Ollama with `ollama serve`. Verify it is responding with `curl http://127.0.0.1:11434/api/tags`.
+
+### 3. `Error: ollama: no model configured for provider "ollama-local"`
+- **Cause**: The `model` key is empty under `[providers.ollama-local]`.
+- **Fix**: Add `model = "llama3.2"` (or any installed model) to the provider section, or select one inside the TUI with `/model`.
+
+### 4. `Error: no active provider; run hikari --provider <name> or set [default] provider in config.toml`
+- **Cause**: Neither `[default] provider` is set in config, nor was `--provider` passed on the CLI.
+- **Fix**: Set `provider = "ollama-local"` under `[default]` in `config.toml`, or specify `hikari --provider <name>`.
+
+---
+
+## 🎨 Customization
 
 ### Personas (`~/.config/hikari/personas/`)
-
-Create custom YAML files in `~/.config/hikari/personas/`:
+Create custom YAML files in your personas directory:
 
 ```yaml
 name: DevOps
@@ -264,8 +317,7 @@ behavior:
 ```
 
 ### Themes (`~/.config/hikari/themes/`)
-
-Create custom TOML files in `~/.config/hikari/themes/`:
+Create custom TOML files in your themes directory:
 
 ```toml
 name = "cyberpunk"
@@ -310,7 +362,7 @@ background  = "#0A0A10"
                ┌────────────┴────────────┐
                │                         │
          Agent Providers           Model Providers
-         (OpenClaw, Hermes)           (Ollama)
+        (OpenClaw, Hermes)            (Ollama)
                │                         │
           Local / VPS               Local / VPS
 ```
