@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -35,12 +36,17 @@ func TestMoveOrCopy(t *testing.T) {
 		t.Errorf("dest content mismatch: got %q, want %q", string(read), string(content))
 	}
 
-	// Verify permissions
-	fi, err := os.Stat(dst)
-	if err != nil {
-		t.Fatalf("stat dest file: %v", err)
-	}
-	if fi.Mode().Perm()&0111 == 0 {
-		t.Errorf("expected executable permissions, got: %v", fi.Mode().Perm())
+	// Verify executable permissions.
+	// Windows does not support Unix execute bits; os.Chmod only controls the
+	// read-only attribute there, so this check is skipped on Windows.
+	if runtime.GOOS != "windows" {
+		fi, err := os.Stat(dst)
+		if err != nil {
+			t.Fatalf("stat dest file: %v", err)
+		}
+		if fi.Mode().Perm()&0111 == 0 {
+			t.Errorf("expected executable permissions, got: %v", fi.Mode().Perm())
+		}
 	}
 }
+
