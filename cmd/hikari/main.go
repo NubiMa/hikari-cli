@@ -14,7 +14,7 @@ import (
 	"github.com/NubiMa/hikari-cli/internal/provider"
 	"github.com/NubiMa/hikari-cli/internal/stream"
 	"github.com/NubiMa/hikari-cli/internal/tui"
-	"github.com/mattn/go-isatty"
+	cbterm "github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
 
@@ -238,9 +238,8 @@ func runInit() error {
 // ---------------------------------------------------------------------------
 
 // isTerminal reports whether the given file is an interactive terminal.
-// Uses go-isatty for correct behaviour on Linux, macOS, and Windows
-// (including Windows Console / ConPTY and Cygwin/MSYS2 terminals).
+// Uses charmbracelet/x/term which is already a transitive dependency and
+// works correctly on Linux, macOS, and Windows (including ConPTY).
 func isTerminal(f *os.File) bool {
-	fd := f.Fd()
-	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
+	return cbterm.IsTerminal(f.Fd())
 }
