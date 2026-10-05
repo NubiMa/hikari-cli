@@ -223,7 +223,7 @@ func runProviderMenu() error {
 		action, selected := showProviderMenu(items, cfg.Default.Provider)
 		switch action {
 		case "add":
-			if err := addProviderInteractive(cfg); err != nil {
+			if err := addProviderInteractive(); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			}
 			// reload
@@ -377,7 +377,7 @@ func (m providerMenuModel) View() string {
 // Provider configuration flows
 // ---------------------------------------------------------------------------
 
-func addProviderInteractive(cfg *config.Config) error {
+func addProviderInteractive() error {
 	items := []struct{ id, label, sub string }{
 		{"openclaw", "OpenClaw (Autonomous Agent)", "Tool execution & shell access on remote server"},
 		{"hermes", "Hermes (Agent Pipeline)", "Multi-turn agent pipeline with tool calling & planning"},
