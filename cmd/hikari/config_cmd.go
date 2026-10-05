@@ -509,7 +509,6 @@ func runConfigureOpenClaw(name, endpoint, token string, timeout int, makeDef, sk
 		name = "openclaw-vps"
 	}
 
-	existing, hasExisting := cfg.Providers[name]
 	interactive := isTerminal(os.Stdin) && endpoint == ""
 
 	reader := bufio.NewReader(os.Stdin)
@@ -520,7 +519,7 @@ func runConfigureOpenClaw(name, endpoint, token string, timeout int, makeDef, sk
 		fmt.Println()
 
 		name = promptInput(reader, "Provider name", name)
-		existing, hasExisting = cfg.Providers[name]
+		existing, hasExisting := cfg.Providers[name]
 
 		defEndpoint := "https://agent.yourserver.com"
 		if hasExisting && existing.Endpoint != "" {
@@ -610,7 +609,6 @@ func runConfigureHermes(name, endpoint, token string, timeout int, makeDef, skip
 		name = "hermes-local"
 	}
 
-	existing, hasExisting := cfg.Providers[name]
 	interactive := isTerminal(os.Stdin) && endpoint == ""
 
 	reader := bufio.NewReader(os.Stdin)
@@ -621,7 +619,7 @@ func runConfigureHermes(name, endpoint, token string, timeout int, makeDef, skip
 		fmt.Println()
 
 		name = promptInput(reader, "Provider name", name)
-		existing, hasExisting = cfg.Providers[name]
+		existing, hasExisting := cfg.Providers[name]
 
 		defEndpoint := "http://127.0.0.1:8080"
 		if hasExisting && existing.Endpoint != "" {
@@ -711,7 +709,6 @@ func runConfigureOllama(name, endpoint, model, token string, timeout int, makeDe
 		name = "ollama-local"
 	}
 
-	existing, hasExisting := cfg.Providers[name]
 	interactive := isTerminal(os.Stdin) && endpoint == ""
 
 	reader := bufio.NewReader(os.Stdin)
@@ -722,7 +719,7 @@ func runConfigureOllama(name, endpoint, model, token string, timeout int, makeDe
 		fmt.Println()
 
 		name = promptInput(reader, "Provider name", name)
-		existing, hasExisting = cfg.Providers[name]
+		existing, hasExisting := cfg.Providers[name]
 
 		defEndpoint := "http://127.0.0.1:11434"
 		if hasExisting && existing.Endpoint != "" {
