@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,7 +32,10 @@ func configCmd() *cobra.Command {
 Manage providers, personas, and themes without editing config.toml by hand.
 
 Subcommands:
-  hikari config provider    Manage AI providers
+  hikari config openclaw    Configure OpenClaw provider (auto-updates config.toml)
+  hikari config hermes      Configure Hermes provider (auto-updates config.toml)
+  hikari config ollama      Configure Ollama provider (auto-updates config.toml)
+  hikari config provider    Manage AI providers interactively
   hikari config test        Ping all configured providers
   hikari config edit        Open config.toml in $EDITOR
   hikari config path        Print the config file path
@@ -41,6 +46,9 @@ Subcommands:
 	}
 
 	// Sub-sub commands
+	root.AddCommand(configOpenClawCmd())
+	root.AddCommand(configHermesCmd())
+	root.AddCommand(configOllamaCmd())
 	root.AddCommand(configProviderCmd())
 	root.AddCommand(configTestCmd())
 	root.AddCommand(configEditCmd())
@@ -366,23 +374,497 @@ func (m providerMenuModel) View() string {
 }
 
 // ---------------------------------------------------------------------------
-// Add provider flow (calls into wizard internals)
+// Provider configuration flows
 // ---------------------------------------------------------------------------
 
-func addProviderInteractive(_ *config.Config) error {
-	// Guide user to the wizard or manual edit — full form TUI is in hikari config setup.
-	fmt.Println()
-	fmt.Println(styles.Bold.Render("Adding a new provider"))
-	fmt.Println(styles.Muted.Render("Run `hikari config setup` to use the guided wizard, or"))
-	fmt.Println(styles.Muted.Render("edit " + config.ConfigFile() + " directly."))
-	fmt.Println()
+func addProviderInteractive(cfg *config.Config) error {
+	items := []struct{ id, label, sub string }{
+		{"openclaw", "OpenClaw (Autonomous Agent)", "Tool execution & shell access on remote server"},
+		{"hermes", "Hermes (Agent Pipeline)", "Multi-turn agent pipeline with tool calling & planning"},
+		{"ollama", "Ollama (Local / Remote)", "Run models like llama3.2, mistral, qwen"},
+	}
+	chosen := pickFromList("Select Provider Type to Add", items, "")
+	switch chosen {
+	case "openclaw":
+		return runConfigureOpenClaw("openclaw-vps", "", "", 180, false, false)
+	case "hermes":
+		return runConfigureHermes("hermes-local", "", "", 120, false, false)
+	case "ollama":
+		return runConfigureOllama("ollama-local", "", "", "", 120, false, false)
+	default:
+		return nil
+	}
+}
+
+func configOpenClawCmd() *cobra.Command {
+	var (
+		name     string
+		endpoint string
+		token    string
+		timeout  int
+		makeDef  bool
+		skipTest bool
+	)
+	cmd := &cobra.Command{
+		Use:   "openclaw",
+		Short: "Configure OpenClaw provider (auto-updates config.toml)",
+		Long: `Configure an OpenClaw provider (autonomous agent with tool execution & shell access).
+Can be run interactively or with command-line flags. Automatically saves changes to config.toml.
+
+Examples:
+  hikari config openclaw
+  hikari config openclaw --endpoint https://agent.yourserver.com --token mytoken --default
+`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConfigureOpenClaw(name, endpoint, token, timeout, makeDef, skipTest)
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "openclaw-vps", "Provider name identifier in config")
+	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "OpenClaw server endpoint URL")
+	cmd.Flags().StringVarP(&token, "token", "t", "", "API token / bearer token")
+	cmd.Flags().IntVar(&timeout, "timeout", 180, "Timeout in seconds")
+	cmd.Flags().BoolVarP(&makeDef, "default", "d", false, "Set as active default provider")
+	cmd.Flags().BoolVar(&skipTest, "skip-test", false, "Skip connection ping test")
+	return cmd
+}
+
+func configHermesCmd() *cobra.Command {
+	var (
+		name     string
+		endpoint string
+		token    string
+		timeout  int
+		makeDef  bool
+		skipTest bool
+	)
+	cmd := &cobra.Command{
+		Use:   "hermes",
+		Short: "Configure Hermes provider (auto-updates config.toml)",
+		Long: `Configure a Hermes provider (multi-turn agent pipeline with tool calling & planning).
+Can be run interactively or with command-line flags. Automatically saves changes to config.toml.
+
+Examples:
+  hikari config hermes
+  hikari config hermes --endpoint http://127.0.0.1:8080 --default
+`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConfigureHermes(name, endpoint, token, timeout, makeDef, skipTest)
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "hermes-local", "Provider name identifier in config")
+	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "Hermes server endpoint URL")
+	cmd.Flags().StringVarP(&token, "token", "t", "", "Optional API token / bearer token")
+	cmd.Flags().IntVar(&timeout, "timeout", 120, "Timeout in seconds")
+	cmd.Flags().BoolVarP(&makeDef, "default", "d", false, "Set as active default provider")
+	cmd.Flags().BoolVar(&skipTest, "skip-test", false, "Skip connection ping test")
+	return cmd
+}
+
+func configOllamaCmd() *cobra.Command {
+	var (
+		name     string
+		endpoint string
+		model    string
+		token    string
+		timeout  int
+		makeDef  bool
+		skipTest bool
+	)
+	cmd := &cobra.Command{
+		Use:   "ollama",
+		Short: "Configure Ollama provider (auto-updates config.toml)",
+		Long: `Configure an Ollama provider (local or remote LLM server).
+Can be run interactively or with command-line flags. Automatically saves changes to config.toml.
+
+Examples:
+  hikari config ollama
+  hikari config ollama --endpoint http://127.0.0.1:11434 --model llama3.2 --default
+`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConfigureOllama(name, endpoint, model, token, timeout, makeDef, skipTest)
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "ollama-local", "Provider name identifier in config")
+	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "Ollama server endpoint URL")
+	cmd.Flags().StringVarP(&model, "model", "m", "", "Model name (e.g. llama3.2, mistral)")
+	cmd.Flags().StringVarP(&token, "token", "t", "", "Optional API token")
+	cmd.Flags().IntVar(&timeout, "timeout", 120, "Timeout in seconds")
+	cmd.Flags().BoolVarP(&makeDef, "default", "d", false, "Set as active default provider")
+	cmd.Flags().BoolVar(&skipTest, "skip-test", false, "Skip connection ping test")
+	return cmd
+}
+
+func runConfigureOpenClaw(name, endpoint, token string, timeout int, makeDef, skipTest bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{
+			Providers: make(map[string]config.ProviderConfig),
+		}
+	}
+	if cfg.Providers == nil {
+		cfg.Providers = make(map[string]config.ProviderConfig)
+	}
+
+	if name == "" {
+		name = "openclaw-vps"
+	}
+
+	existing, hasExisting := cfg.Providers[name]
+	interactive := isTerminal(os.Stdin) && endpoint == ""
+
+	reader := bufio.NewReader(os.Stdin)
+	if interactive {
+		fmt.Println()
+		fmt.Println(styles.Bold.Render("⚙  Configure OpenClaw Provider"))
+		fmt.Println(styles.Muted.Render("Autonomous agent backend with tool calling, shell commands & memory."))
+		fmt.Println()
+
+		name = promptInput(reader, "Provider name", name)
+		existing, hasExisting = cfg.Providers[name]
+
+		defEndpoint := "https://agent.yourserver.com"
+		if hasExisting && existing.Endpoint != "" {
+			defEndpoint = existing.Endpoint
+		}
+		if endpoint != "" {
+			defEndpoint = endpoint
+		}
+		endpoint = promptInput(reader, "Endpoint URL", defEndpoint)
+
+		tokenPrompt := "API token / bearer key"
+		defToken := ""
+		if hasExisting && existing.Token != "" {
+			tokenPrompt = "API token (press Enter to keep existing token)"
+			defToken = existing.Token
+		}
+		enteredToken := promptInput(reader, tokenPrompt, "")
+		if enteredToken != "" {
+			token = enteredToken
+		} else if defToken != "" {
+			token = defToken
+		}
+
+		defTimeout := "180"
+		if hasExisting && existing.TimeoutSeconds > 0 {
+			defTimeout = strconv.Itoa(existing.TimeoutSeconds)
+		} else if timeout > 0 {
+			defTimeout = strconv.Itoa(timeout)
+		}
+		tStr := promptInput(reader, "Timeout in seconds", defTimeout)
+		if n, err := strconv.Atoi(tStr); err == nil && n > 0 {
+			timeout = n
+		}
+
+		defIsDefault := cfg.Default.Provider == "" || cfg.Default.Provider == name
+		if !makeDef {
+			makeDef = promptConfirm(reader, "Set as default provider?", defIsDefault)
+		}
+		fmt.Println()
+	}
+
+	if endpoint == "" {
+		endpoint = "https://agent.yourserver.com"
+	}
+	if timeout <= 0 {
+		timeout = 180
+	}
+
+	pcfg := config.ProviderConfig{
+		Type:           "openclaw",
+		Endpoint:       endpoint,
+		Token:          token,
+		TimeoutSeconds: timeout,
+	}
+
+	if !skipTest {
+		fmt.Printf("Testing connection to %s (%s)…\n", styles.Bold.Render(name), pcfg.Endpoint)
+		ok, msg := pingProvider(name, pcfg)
+		if ok {
+			fmt.Printf("  %s Connected%s\n\n", styles.Success.Render("✓"), msg)
+		} else {
+			fmt.Printf("  %s %s\n", styles.Error.Render("✗"), msg)
+			if interactive {
+				if !promptConfirm(reader, "Save configuration anyway?", true) {
+					return fmt.Errorf("configuration aborted by user")
+				}
+				fmt.Println()
+			}
+		}
+	}
+
+	return saveProviderConfig(cfg, name, pcfg, makeDef)
+}
+
+func runConfigureHermes(name, endpoint, token string, timeout int, makeDef, skipTest bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{
+			Providers: make(map[string]config.ProviderConfig),
+		}
+	}
+	if cfg.Providers == nil {
+		cfg.Providers = make(map[string]config.ProviderConfig)
+	}
+
+	if name == "" {
+		name = "hermes-local"
+	}
+
+	existing, hasExisting := cfg.Providers[name]
+	interactive := isTerminal(os.Stdin) && endpoint == ""
+
+	reader := bufio.NewReader(os.Stdin)
+	if interactive {
+		fmt.Println()
+		fmt.Println(styles.Bold.Render("⚙  Configure Hermes Provider"))
+		fmt.Println(styles.Muted.Render("Multi-turn agent pipeline with function calling & planning."))
+		fmt.Println()
+
+		name = promptInput(reader, "Provider name", name)
+		existing, hasExisting = cfg.Providers[name]
+
+		defEndpoint := "http://127.0.0.1:8080"
+		if hasExisting && existing.Endpoint != "" {
+			defEndpoint = existing.Endpoint
+		}
+		if endpoint != "" {
+			defEndpoint = endpoint
+		}
+		endpoint = promptInput(reader, "Endpoint URL", defEndpoint)
+
+		tokenPrompt := "API token (optional, press Enter to skip)"
+		defToken := ""
+		if hasExisting && existing.Token != "" {
+			tokenPrompt = "API token (press Enter to keep existing token)"
+			defToken = existing.Token
+		}
+		enteredToken := promptInput(reader, tokenPrompt, "")
+		if enteredToken != "" {
+			token = enteredToken
+		} else if defToken != "" {
+			token = defToken
+		}
+
+		defTimeout := "120"
+		if hasExisting && existing.TimeoutSeconds > 0 {
+			defTimeout = strconv.Itoa(existing.TimeoutSeconds)
+		} else if timeout > 0 {
+			defTimeout = strconv.Itoa(timeout)
+		}
+		tStr := promptInput(reader, "Timeout in seconds", defTimeout)
+		if n, err := strconv.Atoi(tStr); err == nil && n > 0 {
+			timeout = n
+		}
+
+		defIsDefault := cfg.Default.Provider == "" || cfg.Default.Provider == name
+		if !makeDef {
+			makeDef = promptConfirm(reader, "Set as default provider?", defIsDefault)
+		}
+		fmt.Println()
+	}
+
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:8080"
+	}
+	if timeout <= 0 {
+		timeout = 120
+	}
+
+	pcfg := config.ProviderConfig{
+		Type:           "hermes",
+		Endpoint:       endpoint,
+		Token:          token,
+		TimeoutSeconds: timeout,
+	}
+
+	if !skipTest {
+		fmt.Printf("Testing connection to %s (%s)…\n", styles.Bold.Render(name), pcfg.Endpoint)
+		ok, msg := pingProvider(name, pcfg)
+		if ok {
+			fmt.Printf("  %s Connected%s\n\n", styles.Success.Render("✓"), msg)
+		} else {
+			fmt.Printf("  %s %s\n", styles.Error.Render("✗"), msg)
+			if interactive {
+				if !promptConfirm(reader, "Save configuration anyway?", true) {
+					return fmt.Errorf("configuration aborted by user")
+				}
+				fmt.Println()
+			}
+		}
+	}
+
+	return saveProviderConfig(cfg, name, pcfg, makeDef)
+}
+
+func runConfigureOllama(name, endpoint, model, token string, timeout int, makeDef, skipTest bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{
+			Providers: make(map[string]config.ProviderConfig),
+		}
+	}
+	if cfg.Providers == nil {
+		cfg.Providers = make(map[string]config.ProviderConfig)
+	}
+
+	if name == "" {
+		name = "ollama-local"
+	}
+
+	existing, hasExisting := cfg.Providers[name]
+	interactive := isTerminal(os.Stdin) && endpoint == ""
+
+	reader := bufio.NewReader(os.Stdin)
+	if interactive {
+		fmt.Println()
+		fmt.Println(styles.Bold.Render("⚙  Configure Ollama Provider"))
+		fmt.Println(styles.Muted.Render("Local or remote open-source LLM server."))
+		fmt.Println()
+
+		name = promptInput(reader, "Provider name", name)
+		existing, hasExisting = cfg.Providers[name]
+
+		defEndpoint := "http://127.0.0.1:11434"
+		if hasExisting && existing.Endpoint != "" {
+			defEndpoint = existing.Endpoint
+		}
+		if endpoint != "" {
+			defEndpoint = endpoint
+		}
+		endpoint = promptInput(reader, "Endpoint URL", defEndpoint)
+
+		defModel := "llama3.2"
+		if hasExisting && existing.Model != "" {
+			defModel = existing.Model
+		}
+		if model != "" {
+			defModel = model
+		}
+		model = promptInput(reader, "Model name", defModel)
+
+		tokenPrompt := "API token (optional, press Enter to skip)"
+		defToken := ""
+		if hasExisting && existing.Token != "" {
+			tokenPrompt = "API token (press Enter to keep existing token)"
+			defToken = existing.Token
+		}
+		enteredToken := promptInput(reader, tokenPrompt, "")
+		if enteredToken != "" {
+			token = enteredToken
+		} else if defToken != "" {
+			token = defToken
+		}
+
+		defTimeout := "120"
+		if hasExisting && existing.TimeoutSeconds > 0 {
+			defTimeout = strconv.Itoa(existing.TimeoutSeconds)
+		} else if timeout > 0 {
+			defTimeout = strconv.Itoa(timeout)
+		}
+		tStr := promptInput(reader, "Timeout in seconds", defTimeout)
+		if n, err := strconv.Atoi(tStr); err == nil && n > 0 {
+			timeout = n
+		}
+
+		defIsDefault := cfg.Default.Provider == "" || cfg.Default.Provider == name
+		if !makeDef {
+			makeDef = promptConfirm(reader, "Set as default provider?", defIsDefault)
+		}
+		fmt.Println()
+	}
+
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:11434"
+	}
+	if model == "" {
+		model = "llama3.2"
+	}
+	if timeout <= 0 {
+		timeout = 120
+	}
+
+	pcfg := config.ProviderConfig{
+		Type:           "ollama",
+		Endpoint:       endpoint,
+		Model:          model,
+		Token:          token,
+		TimeoutSeconds: timeout,
+	}
+
+	if !skipTest {
+		fmt.Printf("Testing connection to %s (%s)…\n", styles.Bold.Render(name), pcfg.Endpoint)
+		ok, msg := pingProvider(name, pcfg)
+		if ok {
+			fmt.Printf("  %s Connected%s\n\n", styles.Success.Render("✓"), msg)
+		} else {
+			fmt.Printf("  %s %s\n", styles.Error.Render("✗"), msg)
+			if interactive {
+				if !promptConfirm(reader, "Save configuration anyway?", true) {
+					return fmt.Errorf("configuration aborted by user")
+				}
+				fmt.Println()
+			}
+		}
+	}
+
+	return saveProviderConfig(cfg, name, pcfg, makeDef)
+}
+
+func promptInput(reader *bufio.Reader, label, defaultVal string) string {
+	if defaultVal != "" {
+		fmt.Printf("  %s [%s]: ", label, defaultVal)
+	} else {
+		fmt.Printf("  %s: ", label)
+	}
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return defaultVal
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return defaultVal
+	}
+	return line
+}
+
+func promptConfirm(reader *bufio.Reader, label string, defaultYes bool) bool {
+	hint := "[Y/n]"
+	if !defaultYes {
+		hint = "[y/N]"
+	}
+	fmt.Printf("  %s %s: ", label, hint)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return defaultYes
+	}
+	line = strings.TrimSpace(strings.ToLower(line))
+	if line == "" {
+		return defaultYes
+	}
+	return line == "y" || line == "yes"
+}
+
+func saveProviderConfig(cfg *config.Config, name string, pcfg config.ProviderConfig, makeDefault bool) error {
+	if cfg.Providers == nil {
+		cfg.Providers = make(map[string]config.ProviderConfig)
+	}
+	cfg.Providers[name] = pcfg
+	if makeDefault || cfg.Default.Provider == "" {
+		cfg.Default.Provider = name
+	}
+	if err := config.WriteFromStruct(cfg); err != nil {
+		return fmt.Errorf("writing config file: %w", err)
+	}
+
+	fmt.Printf("%s Provider %s (%s) saved!\n", styles.Success.Render("✓"), styles.Bold.Render(name), pcfg.Type)
+	if cfg.Default.Provider == name {
+		fmt.Printf("  Active default: %s\n", styles.Bold.Render(name))
+	}
+	fmt.Printf("  Config file:    %s\n\n", config.ConfigFile())
 	return nil
 }
 
-// testProvider pings a single provider and prints the result.
-func testProvider(name string, pcfg config.ProviderConfig) {
-	fmt.Printf("Testing %s (%s)…\n", name, pcfg.Endpoint)
-
+func pingProvider(name string, pcfg config.ProviderConfig) (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
@@ -396,23 +878,19 @@ func testProvider(name string, pcfg config.ProviderConfig) {
 	case "hermes":
 		prov, err = hermes.New(name, pcfg)
 	default:
-		fmt.Printf("  %s Unknown provider type %q\n", styles.Error.Render("✗"), pcfg.Type)
-		return
+		return false, fmt.Sprintf("unknown provider type %q", pcfg.Type)
 	}
 	if err != nil {
-		fmt.Printf("  %s %v\n", styles.Error.Render("✗"), err)
-		return
+		return false, err.Error()
 	}
 
 	if err := prov.Connect(ctx); err != nil {
-		fmt.Printf("  %s %v\n", styles.Error.Render("✗"), err)
-		return
+		return false, err.Error()
 	}
 
 	status, err := prov.Status(ctx)
 	if err != nil {
-		fmt.Printf("  %s %v\n", styles.Error.Render("✗"), err)
-		return
+		return false, err.Error()
 	}
 
 	if status.Connected {
@@ -420,9 +898,19 @@ func testProvider(name string, pcfg config.ProviderConfig) {
 		if status.Latency > 0 {
 			latency = fmt.Sprintf(" (%dms)", status.Latency.Milliseconds())
 		}
-		fmt.Printf("  %s Connected%s\n", styles.Success.Render("✓"), latency)
+		return true, latency
+	}
+	return false, "offline: " + status.Message
+}
+
+// testProvider pings a single provider and prints the result.
+func testProvider(name string, pcfg config.ProviderConfig) {
+	fmt.Printf("Testing %s (%s)…\n", name, pcfg.Endpoint)
+	ok, msg := pingProvider(name, pcfg)
+	if ok {
+		fmt.Printf("  %s Connected%s\n", styles.Success.Render("✓"), msg)
 	} else {
-		fmt.Printf("  %s Offline: %s\n", styles.Error.Render("✗"), status.Message)
+		fmt.Printf("  %s %s\n", styles.Error.Render("✗"), msg)
 	}
 	fmt.Println()
 }
@@ -623,6 +1111,10 @@ func configProviderCmd() *cobra.Command {
 			return runProviderMenu()
 		},
 	}
+
+	cmd.AddCommand(configOpenClawCmd())
+	cmd.AddCommand(configHermesCmd())
+	cmd.AddCommand(configOllamaCmd())
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",

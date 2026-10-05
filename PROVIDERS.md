@@ -185,7 +185,16 @@ When Hikari connects to OpenClaw:
 
 ### 4.2 Configuration Options
 
-In `~/.config/hikari/config.toml`:
+#### Quick CLI Configuration (auto-updates `config.toml`):
+```bash
+# Interactive setup:
+hikari config openclaw
+
+# One-liner with flags:
+hikari config openclaw --endpoint https://agent.example.com --token "sk-claw-..." --default
+```
+
+#### Manual Configuration in `~/.config/hikari/config.toml`:
 
 ```toml
 [providers.openclaw-vps]
@@ -252,7 +261,16 @@ Hermes integrates as an agent provider, providing:
 
 ### 5.2 Configuration Options
 
-In `~/.config/hikari/config.toml`:
+#### Quick CLI Configuration (auto-updates `config.toml`):
+```bash
+# Interactive setup:
+hikari config hermes
+
+# One-liner with flags:
+hikari config hermes --endpoint http://127.0.0.1:8080 --default
+```
+
+#### Manual Configuration in `~/.config/hikari/config.toml`:
 
 ```toml
 # Local Hermes service

@@ -157,7 +157,16 @@ If your GPU server or workstation runs Ollama remotely:
 
 [OpenClaw](https://github.com/) is an autonomous agent backend supporting tool execution, shell commands, filesystem access, and persistent memory.
 
-Configure in `config.toml`:
+#### Quick Setup via CLI (auto-updates `config.toml`):
+```bash
+# Interactive setup:
+hikari config openclaw
+
+# Or one-liner with flags:
+hikari config openclaw --endpoint https://agent.yourdomain.com --token "sk-claw-..." --default
+```
+
+Or configure manually in `config.toml`:
 ```toml
 [default]
 provider = "openclaw-vps"
@@ -187,6 +196,16 @@ Hikari automatically maps `HIKARI_<PROVIDER_NAME>_TOKEN` to the matching provide
 
 [Hermes](https://github.com/) powers multi-turn agent pipelines, tool calling, and planning.
 
+#### Quick Setup via CLI (auto-updates `config.toml`):
+```bash
+# Interactive setup:
+hikari config hermes
+
+# Or one-liner with flags:
+hikari config hermes --endpoint http://127.0.0.1:8080 --default
+```
+
+Or configure manually:
 1. **Verify Hermes is reachable**:
    ```bash
    curl -s http://127.0.0.1:8080/health
