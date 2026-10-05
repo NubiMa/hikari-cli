@@ -15,7 +15,6 @@ import (
 	"github.com/NubiMa/hikari-cli/internal/provider/openclaw"
 	"github.com/NubiMa/hikari-cli/internal/tui/styles"
 	"github.com/NubiMa/hikari-cli/internal/wizard"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -201,9 +200,8 @@ func (m configMenuModel) View() string {
 // ---------------------------------------------------------------------------
 
 type providerMenuItem struct {
-	name   string
-	cfg    config.ProviderConfig
-	status string // "●" or "○"
+	name string
+	cfg  config.ProviderConfig
 }
 
 func runProviderMenu() error {
@@ -734,42 +732,4 @@ func configSetupCmd() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-// inputField is a simple labeled text input used within config forms.
-type inputField struct {
-	Label   string
-	Hint    string
-	input   textinput.Model
-	Focused bool
-}
-
-func (f *inputField) Value() string { return strings.TrimSpace(f.input.Value()) }
-
-func (f inputField) View(focused bool) string {
-	var lbl string
-	if focused {
-		lbl = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A78BFA")).Render("  ❯ " + f.Label)
-	} else {
-		lbl = lipgloss.NewStyle().Foreground(lipgloss.Color("#9CA3AF")).Render("    " + f.Label)
-	}
-
-	inputStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Padding(0, 1)
-	if focused {
-		inputStyle = inputStyle.BorderForeground(lipgloss.Color("#7C3AED"))
-	} else {
-		inputStyle = inputStyle.BorderForeground(lipgloss.Color("#4C1D95"))
-	}
-
-	var b strings.Builder
-	b.WriteString(lbl)
-	b.WriteString("\n")
-	b.WriteString(inputStyle.Width(52).Render(f.input.View()))
-	if f.Hint != "" {
-		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#9CA3AF")).Italic(true).Render("      " + f.Hint))
-	}
-	return b.String()
 }

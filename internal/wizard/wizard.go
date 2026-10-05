@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +35,6 @@ var (
 	colError   = lipgloss.Color("#F87171")
 	colMuted   = lipgloss.Color("#9CA3AF")
 	colText    = lipgloss.Color("#F9FAFB")
-	colSubtle  = lipgloss.Color("#1E1E2E")
 	colBorder  = lipgloss.Color("#4C1D95")
 )
 
@@ -412,7 +412,9 @@ func (m *Model) collectProviderConfig() {
 
 	timeout := 120
 	if t := fieldMap["Timeout (seconds)"]; t != "" {
-		fmt.Sscanf(t, "%d", &timeout)
+		if n, err := strconv.Atoi(t); err == nil {
+			timeout = n
+		}
 	}
 
 	provType := "ollama"
