@@ -113,10 +113,10 @@ func TestManagerEmbedded(t *testing.T) {
 	if len(all) == 0 {
 		t.Fatal("expected at least one persona from embedded assets")
 	}
-	// Nino is a canonical builtin — verify it exists.
-	_, found := mgr.Get("nino")
+	// Hikari is a canonical builtin — verify it exists.
+	_, found := mgr.Get("hikari")
 	if !found {
-		t.Error("expected builtin 'nino' persona to be present")
+		t.Error("expected builtin 'hikari' persona to be present")
 	}
 }
 

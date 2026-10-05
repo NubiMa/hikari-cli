@@ -516,7 +516,7 @@ func runSetPersona() error {
 	}
 
 	items := []struct{ id, label, sub string }{
-		{"nino", "Nino", "Friendly conversational assistant — warm and helpful"},
+		{"hikari", "Hikari", "Friendly conversational assistant — warm and helpful"},
 		{"developer", "Developer", "Code-focused assistant — concise, technical, precise"},
 		{"sysadmin", "SysAdmin", "System admin expert — commands, logs, infrastructure"},
 		{"default", "Default", "Generic helpful assistant — neutral and balanced"},

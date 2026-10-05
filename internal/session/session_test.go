@@ -16,7 +16,7 @@ func TestSessionCRUD(t *testing.T) {
 	}
 
 	// Create
-	s, err := mgr.Create("ollama-local", "ollama", "nino", "llama3.2")
+	s, err := mgr.Create("ollama-local", "ollama", "hikari", "llama3.2")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}

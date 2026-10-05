@@ -195,8 +195,8 @@ func WriteDefault() error {
 # Name of the active provider (must match a key in [providers.*] below).
 provider = ""
 
-# Active persona: "nino", "developer", "sysadmin", or any custom persona name.
-persona  = "nino"
+# Active persona: "hikari", "developer", "sysadmin", or any custom persona name.
+persona  = "hikari"
 
 # Default model override (optional — provider config takes precedence if blank).
 model    = ""

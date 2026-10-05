@@ -27,7 +27,7 @@ type Behavior struct {
 
 // Persona defines an AI character's identity and behavior.
 type Persona struct {
-	// Name is the display name of the persona (e.g. "Nino").
+	// Name is the display name of the persona (e.g. "Hikari").
 	Name string `yaml:"name"`
 
 	// Description is a short human-readable description shown in the picker.

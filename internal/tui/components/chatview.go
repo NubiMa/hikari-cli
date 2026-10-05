@@ -165,7 +165,7 @@ func (c ChatView) renderSplash(width int) string {
 	cardContent := fmt.Sprintf(
 		"%s\n\n"+
 			"  %s  Select AI Provider (Ollama, OpenClaw, Hermes)\n"+
-			"  %s  Select Persona (Nino, Developer, SysAdmin)\n"+
+			"  %s  Select Persona (Hikari, Developer, SysAdmin)\n"+
 			"  %s  Select Color Theme (Default, Minimal, Tokyo Night)\n"+
 			"  %s  View all commands & keybindings\n\n"+
 			"%s",

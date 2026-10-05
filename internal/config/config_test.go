@@ -26,7 +26,7 @@ func TestLoadValidConfig(t *testing.T) {
 	content := `
 [default]
 provider = "ollama-local"
-persona  = "nino"
+persona  = "hikari"
 
 [providers.ollama-local]
 type     = "ollama"

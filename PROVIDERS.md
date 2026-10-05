@@ -50,7 +50,7 @@ Run `hikari --init` to generate the default directory structure and skeleton con
 ```toml
 [default]
 provider = "ollama-local"
-persona  = "nino"
+persona  = "hikari"
 model    = "llama3.2"
 
 # ── 1. Local Ollama ──────────────────────────────────────────────────────────

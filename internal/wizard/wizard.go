@@ -129,7 +129,7 @@ var providerTypes = []providerType{
 }
 
 var personaChoices = []struct{ id, label, desc string }{
-	{"nino", "Nino", "Friendly conversational assistant — warm, helpful, human-like"},
+	{"hikari", "Hikari", "Friendly conversational assistant — warm, helpful, human-like"},
 	{"developer", "Developer", "Concise code-focused assistant — technical, direct, precise"},
 	{"sysadmin", "SysAdmin", "System administration expert — commands, logs, infrastructure"},
 	{"default", "Default", "Generic helpful assistant — neutral and balanced"},

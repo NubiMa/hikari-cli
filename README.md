@@ -23,7 +23,7 @@ Hikari acts as the shell and orchestration layer, leaving AI processing to your 
 - ⚡ **CLI One-Shot Mode**: Fast single-query answers via `hikari "explain this error"`.
 - 🚰 **Unix Pipeline Integration**: Stream stdin directly into prompts (`cat file | hikari "summarize"` or `git diff | hikari "review"`).
 - 🔌 **Provider-Agnostic Abstraction**: Connect to local Ollama instances or remote VPS backends without rewriting scripts or changing workflows.
-- 🎭 **Persona System**: Decouple personality and behavior from the platform using YAML personas (comes with `Nino`, `Developer`, and `SysAdmin`).
+- 🎭 **Persona System**: Decouple personality and behavior from the platform using YAML personas (comes with `Hikari`, `Developer`, and `SysAdmin`).
 - 🎨 **Theming & ASCII Art**: Fully customisable TOML themes and ASCII art banners (`Default Violet`, `Minimal`, `Tokyo Night`).
 - 📜 **Session Persistence & History**: Automatically saves conversations with date grouping and resume support.
 - 🔒 **Security-First**: Token overrides via environment variables (`HIKARI_<PROVIDER>_TOKEN`) and credential sanitisation in terminal logs.
@@ -120,7 +120,7 @@ Open `~/.config/hikari/config.toml` (or `%APPDATA%\hikari\config.toml` on Window
 ```toml
 [default]
 provider = "ollama-local"
-persona  = "nino"
+persona  = "hikari"
 model    = "llama3.2"
 
 [providers.ollama-local]
@@ -263,7 +263,7 @@ Type commands directly into the prompt bar starting with `/`:
 |---|---|
 | `/help` | Display list of internal commands |
 | `/provider` | Open interactive provider selector modal |
-| `/persona` | Open interactive persona selector modal (`nino`, `developer`, `sysadmin`) |
+| `/persona` | Open interactive persona selector modal (`hikari`, `developer`, `sysadmin`) |
 | `/model` | List and select available models from the active provider |
 | `/theme` | Switch color theme (`default`, `minimal`, `tokyo-night`) |
 | `/session` / `/history` | Browse past sessions grouped by date and resume conversation |
