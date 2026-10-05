@@ -14,6 +14,7 @@ import (
 	"github.com/NubiMa/hikari-cli/internal/provider"
 	"github.com/NubiMa/hikari-cli/internal/stream"
 	"github.com/NubiMa/hikari-cli/internal/tui"
+	"github.com/NubiMa/hikari-cli/internal/wizard"
 	cbterm "github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
@@ -65,6 +66,19 @@ Usage:
 				return runInit()
 			}
 
+			// First-run: launch wizard if no config file exists
+			if !versionFlag && !initFlag && !config.Exists() && isTerminal(os.Stdin) && isTerminal(os.Stdout) {
+				path, err := wizard.Run()
+				if err != nil {
+					return fmt.Errorf("setup wizard: %w", err)
+				}
+				if path == "" {
+					// User quit the wizard without saving — exit cleanly
+					return nil
+				}
+				// Wizard saved config — fall through to start Hikari normally
+			}
+
 			// Bootstrap application
 			a, err := buildApp(providerFlag, personaFlag, modelFlag)
 			if err != nil {
@@ -97,6 +111,7 @@ Usage:
 	cmd.Flags().BoolVar(&initFlag, "init", false, "Create default config file and exit")
 
 	cmd.AddCommand(updateCmd())
+	cmd.AddCommand(configCmd())
 
 	return cmd
 }
