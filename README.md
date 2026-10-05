@@ -79,15 +79,75 @@ hikari update
 
 ---
 
-## Quick Start
+## ⚡ Quick Start
 
-### 1. Initialize Configuration
-Generate the default directory structure and a starter configuration file:
+### 1. First-Run Setup Wizard
+The first time you launch `hikari` on a fresh system, it automatically starts the **interactive setup wizard**:
 ```bash
-hikari --init
+hikari
+```
+The wizard guides you through:
+1. **Selecting an AI backend** (`Ollama`, `OpenClaw`, or `Hermes`)
+2. **Configuring endpoint, model, and authentication**
+3. **Live connection test** (pings your backend to ensure it's online)
+4. **Selecting a default persona** (`Hikari`, `Developer`, `SysAdmin`)
+5. **Selecting a UI theme** (`Default Violet`, `Minimal`, `Tokyo Night`)
+6. **Writing `config.toml` automatically**
+
+### 2. The `hikari config` CLI & Manager
+Hikari features a dedicated configuration management system. You can open the full-screen interactive manager or configure providers with one-line subcommands:
+
+```bash
+# Open interactive configuration manager:
+hikari config
 ```
 
-Configuration files are located at:
+```
+┌───────────────────────────────────────────────┐
+│              ⚙ HIKARI CONFIG                  │
+│                                               │
+│  › Providers            1 configured          │
+│    Test Connections     ping all backends     │
+│    Default Persona      hikari                │
+│    Default Theme        default               │
+│    Edit config.toml     open in $EDITOR       │
+│    Show config path     ~/.config/...         │
+│    Re-run setup wizard  guided first-run      │
+│    Exit                                       │
+└───────────────────────────────────────────────┘
+```
+
+#### Direct Provider Setup Subcommands (auto-updates `config.toml`):
+Configure any provider interactively or via flags without touching TOML files by hand:
+
+```bash
+# Configure Ollama (local or remote):
+hikari config ollama
+hikari config ollama --endpoint http://127.0.0.1:11434 --model llama3.2 --default
+
+# Configure OpenClaw (autonomous agent):
+hikari config openclaw
+hikari config openclaw --endpoint https://agent.yourdomain.com --token "sk-claw-..." --default
+
+# Configure Hermes (agent pipeline):
+hikari config hermes
+hikari config hermes --endpoint http://127.0.0.1:8080 --default
+```
+
+#### Useful Config Commands:
+| Command | Description |
+|---|---|
+| `hikari config` | Open interactive configuration menu |
+| `hikari config provider` | Interactive provider manager (test, set default, delete, add) |
+| `hikari config provider list` | List all configured providers and the active default |
+| `hikari config test` | Ping all configured providers and verify connection latencies |
+| `hikari config test <name>` | Ping a specific provider |
+| `hikari config setup` | Re-run the interactive first-run setup wizard |
+| `hikari config edit` | Open `config.toml` in your default `$EDITOR` |
+| `hikari config path` | Print the exact path to `config.toml` on your system |
+| `hikari --init` | Generate default directory structure and skeleton config |
+
+Configuration file locations:
 - **Linux & macOS**: `~/.config/hikari/config.toml`
 - **Windows**: `%APPDATA%\hikari\config.toml` (e.g. `C:\Users\<User>\AppData\Roaming\hikari\config.toml`)
 
@@ -115,8 +175,13 @@ ollama serve
 ollama pull llama3.2
 ```
 
-#### Step 2: Configure `config.toml`
-Open `~/.config/hikari/config.toml` (or `%APPDATA%\hikari\config.toml` on Windows) and set:
+#### Step 2: Configure Hikari
+Run the setup command (auto-updates `config.toml`):
+```bash
+hikari config ollama
+```
+
+Or configure manually in `config.toml`:
 ```toml
 [default]
 provider = "ollama-local"
@@ -139,6 +204,11 @@ If your GPU server or workstation runs Ollama remotely:
 1. **Configure Ollama to accept remote connections**:
    Set `OLLAMA_HOST=0.0.0.0:11434` when launching Ollama on the server.
 2. **Configure in Hikari**:
+   ```bash
+   # Quick CLI setup:
+   hikari config ollama --name ollama-vps --endpoint https://ollama.yourdomain.com --model qwen2.5-coder:7b --default
+   ```
+   Or configure manually in `config.toml`:
    ```toml
    [default]
    provider = "ollama-vps"

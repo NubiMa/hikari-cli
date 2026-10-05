@@ -41,6 +41,23 @@ Hikari decouples the terminal user interface from AI inference and execution eng
 
 ## 2. Quick Reference Configuration
 
+### Recommended: Manage via `hikari config` CLI
+You can configure, test, and manage providers directly from your terminal without writing TOML by hand:
+
+```bash
+# Open interactive configuration manager:
+hikari config
+
+# Configure providers with interactive prompts or flags:
+hikari config ollama
+hikari config openclaw
+hikari config hermes
+
+# Test all connections:
+hikari config test
+```
+
+### Manual Configuration
 Configuration is stored at:
 - **Linux/macOS**: `~/.config/hikari/config.toml`
 - **Windows**: `%APPDATA%\hikari\config.toml`
@@ -110,7 +127,15 @@ ascii = "default"
    # or coding-specific models:
    ollama pull qwen2.5-coder:7b
    ```
-4. **Configure in `config.toml`**:
+4. **Configure in Hikari**:
+   ```bash
+   # Quick CLI setup (auto-updates config.toml):
+   hikari config ollama
+
+   # Or specify options directly:
+   hikari config ollama --endpoint http://127.0.0.1:11434 --model llama3.2 --default
+   ```
+   Or configure manually in `config.toml`:
    ```toml
    [providers.ollama-local]
    type     = "ollama"

@@ -19,8 +19,8 @@ Hikari is an open-source terminal-native AI platform designed around a core phil
 
 ```bash
 # Clone the repository
-git clone https://github.com/nubiv/hikari.git
-cd hikari
+git clone https://github.com/NubiMa/hikari-cli.git
+cd hikari-cli
 
 # Build binary
 make build
