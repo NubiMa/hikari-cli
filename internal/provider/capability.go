@@ -82,3 +82,15 @@ func HermesCapabilities() Capabilities {
 		AgentExecution: true,
 	}
 }
+
+// CustomCapabilities returns the capability set for generic custom providers.
+// Custom providers target any OpenAI-compatible HTTP API. We can safely assume
+// chat, streaming, and model listing — but not agent, tool, or memory features
+// because those depend on server-specific capabilities we cannot know statically.
+func CustomCapabilities() Capabilities {
+	return Capabilities{
+		Chat:      true,
+		Streaming: true,
+		Models:    true,
+	}
+}

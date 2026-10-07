@@ -14,6 +14,7 @@ import (
 	"github.com/NubiMa/hikari-cli/internal/config"
 	"github.com/NubiMa/hikari-cli/internal/persona"
 	"github.com/NubiMa/hikari-cli/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/provider/custom"
 	"github.com/NubiMa/hikari-cli/internal/provider/hermes"
 	"github.com/NubiMa/hikari-cli/internal/provider/ollama"
 	"github.com/NubiMa/hikari-cli/internal/provider/openclaw"
@@ -54,6 +55,7 @@ func New() (*App, error) {
 	registry.RegisterType("ollama", ollama.New)
 	registry.RegisterType("openclaw", openclaw.New)
 	registry.RegisterType("hermes", hermes.New)
+	registry.RegisterType("custom", custom.New)
 
 	if err := registry.Build(cfg); err != nil {
 		return nil, fmt.Errorf("building providers: %w", err)

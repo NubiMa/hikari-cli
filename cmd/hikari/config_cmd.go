@@ -12,6 +12,7 @@ import (
 
 	"github.com/NubiMa/hikari-cli/internal/config"
 	"github.com/NubiMa/hikari-cli/internal/provider"
+	"github.com/NubiMa/hikari-cli/internal/provider/custom"
 	"github.com/NubiMa/hikari-cli/internal/provider/hermes"
 	"github.com/NubiMa/hikari-cli/internal/provider/ollama"
 	"github.com/NubiMa/hikari-cli/internal/provider/openclaw"
@@ -49,6 +50,7 @@ Subcommands:
 	root.AddCommand(configOpenClawCmd())
 	root.AddCommand(configHermesCmd())
 	root.AddCommand(configOllamaCmd())
+	root.AddCommand(configCustomCmd())
 	root.AddCommand(configProviderCmd())
 	root.AddCommand(configTestCmd())
 	root.AddCommand(configEditCmd())
@@ -382,6 +384,7 @@ func addProviderInteractive() error {
 		{"openclaw", "OpenClaw (Autonomous Agent)", "Tool execution & shell access on remote server"},
 		{"hermes", "Hermes (Agent Pipeline)", "Multi-turn agent pipeline with tool calling & planning"},
 		{"ollama", "Ollama (Local / Remote)", "Run models like llama3.2, mistral, qwen"},
+		{"custom", "Custom / OpenAI-Compatible", "Groq, Together AI, LM Studio, OpenRouter, vLLM, and more"},
 	}
 	chosen := pickFromList("Select Provider Type to Add", items, "")
 	switch chosen {
@@ -391,6 +394,8 @@ func addProviderInteractive() error {
 		return runConfigureHermes("hermes-local", "", "", 120, false, false)
 	case "ollama":
 		return runConfigureOllama("ollama-local", "", "", "", 120, false, false)
+	case "custom":
+		return runConfigureCustom("my-custom", "", "", "", "/models", 60, false, false)
 	default:
 		return nil
 	}
@@ -874,6 +879,8 @@ func pingProvider(name string, pcfg config.ProviderConfig) (bool, string) {
 		prov, err = openclaw.New(name, pcfg)
 	case "hermes":
 		prov, err = hermes.New(name, pcfg)
+	case "custom":
+		prov, err = custom.New(name, pcfg)
 	default:
 		return false, fmt.Sprintf("unknown provider type %q", pcfg.Type)
 	}
@@ -1112,6 +1119,7 @@ func configProviderCmd() *cobra.Command {
 	cmd.AddCommand(configOpenClawCmd())
 	cmd.AddCommand(configHermesCmd())
 	cmd.AddCommand(configOllamaCmd())
+	cmd.AddCommand(configCustomCmd())
 
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
@@ -1222,3 +1230,178 @@ func configSetupCmd() *cobra.Command {
 		},
 	}
 }
+
+// ---------------------------------------------------------------------------
+// hikari config custom — configure a generic OpenAI-compatible provider
+// ---------------------------------------------------------------------------
+
+func configCustomCmd() *cobra.Command {
+	var (
+		name        string
+		endpoint    string
+		token       string
+		model       string
+		healthPath  string
+		timeout     int
+		makeDef     bool
+		skipTest    bool
+	)
+	cmd := &cobra.Command{
+		Use:   "custom",
+		Short: "Configure a custom/OpenAI-compatible provider (auto-updates config.toml)",
+		Long: `Configure any OpenAI-compatible HTTP API as a Hikari provider.
+Works with Groq, Together AI, LM Studio, OpenRouter, vLLM, Mistral, and more.
+Can be run interactively or with command-line flags. Automatically saves to config.toml.
+
+Examples:
+  hikari config custom
+  hikari config custom --name my-groq --endpoint https://api.groq.com/openai/v1 --token gsk_... --model llama-3.1-70b-versatile --default
+  hikari config custom --name lm-studio --endpoint http://127.0.0.1:1234/v1 --model local-model
+`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConfigureCustom(name, endpoint, token, model, healthPath, timeout, makeDef, skipTest)
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "my-custom", "Provider name identifier in config")
+	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "API base URL (e.g. https://api.groq.com/openai/v1)")
+	cmd.Flags().StringVarP(&token, "token", "t", "", "API key / bearer token (optional for local servers)")
+	cmd.Flags().StringVarP(&model, "model", "m", "", "Model ID to use (e.g. llama-3.1-70b-versatile)")
+	cmd.Flags().StringVar(&healthPath, "health-path", "/models", "Path used to test connectivity")
+	cmd.Flags().IntVar(&timeout, "timeout", 60, "Timeout in seconds")
+	cmd.Flags().BoolVarP(&makeDef, "default", "d", false, "Set as active default provider")
+	cmd.Flags().BoolVar(&skipTest, "skip-test", false, "Skip connection ping test")
+	return cmd
+}
+
+func runConfigureCustom(name, endpoint, token, model, healthPath string, timeout int, makeDef, skipTest bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{
+			Providers: make(map[string]config.ProviderConfig),
+		}
+	}
+	if cfg.Providers == nil {
+		cfg.Providers = make(map[string]config.ProviderConfig)
+	}
+
+	if name == "" {
+		name = "my-custom"
+	}
+
+	interactive := isTerminal(os.Stdin) && endpoint == ""
+
+	reader := bufio.NewReader(os.Stdin)
+	if interactive {
+		fmt.Println()
+		fmt.Println(styles.Bold.Render("⚙  Configure Custom / OpenAI-Compatible Provider"))
+		fmt.Println(styles.Muted.Render("Connect any OpenAI-compatible API: Groq, Together AI, LM Studio, OpenRouter, vLLM, and more."))
+		fmt.Println()
+		fmt.Println(styles.Muted.Render("  Compatible services:"))
+		fmt.Println(styles.Muted.Render("    Groq          → https://api.groq.com/openai/v1"))
+		fmt.Println(styles.Muted.Render("    Together AI   → https://api.together.xyz/v1"))
+		fmt.Println(styles.Muted.Render("    OpenRouter    → https://openrouter.ai/api/v1"))
+		fmt.Println(styles.Muted.Render("    LM Studio     → http://127.0.0.1:1234/v1"))
+		fmt.Println(styles.Muted.Render("    vLLM          → http://your-server:8000/v1"))
+		fmt.Println(styles.Muted.Render("    Mistral       → https://api.mistral.ai/v1"))
+		fmt.Println()
+
+		name = promptInput(reader, "Provider name", name)
+		existing, hasExisting := cfg.Providers[name]
+
+		defEndpoint := "https://"
+		if hasExisting && existing.Endpoint != "" {
+			defEndpoint = existing.Endpoint
+		}
+		if endpoint != "" {
+			defEndpoint = endpoint
+		}
+		endpoint = promptInput(reader, "API Base URL (include /v1 if needed)", defEndpoint)
+
+		tokenPrompt := "API Key / Bearer Token (optional, press Enter to skip)"
+		defToken := ""
+		if hasExisting && existing.Token != "" {
+			tokenPrompt = "API Key (press Enter to keep existing key)"
+			defToken = existing.Token
+		}
+		enteredToken := promptInput(reader, tokenPrompt, "")
+		if enteredToken != "" {
+			token = enteredToken
+		} else if defToken != "" {
+			token = defToken
+		}
+
+		defModel := ""
+		if hasExisting && existing.Model != "" {
+			defModel = existing.Model
+		}
+		if model != "" {
+			defModel = model
+		}
+		model = promptInput(reader, "Model ID (e.g. llama-3.1-70b-versatile)", defModel)
+
+		defHealthPath := "/models"
+		if hasExisting && existing.HealthPath != "" {
+			defHealthPath = existing.HealthPath
+		}
+		if healthPath != "" && healthPath != "/models" {
+			defHealthPath = healthPath
+		}
+		healthPath = promptInput(reader, "Health check path (used for ping test)", defHealthPath)
+
+		defTimeout := "60"
+		if hasExisting && existing.TimeoutSeconds > 0 {
+			defTimeout = strconv.Itoa(existing.TimeoutSeconds)
+		} else if timeout > 0 {
+			defTimeout = strconv.Itoa(timeout)
+		}
+		tStr := promptInput(reader, "Timeout in seconds", defTimeout)
+		if n, err := strconv.Atoi(tStr); err == nil && n > 0 {
+			timeout = n
+		}
+
+		defIsDefault := cfg.Default.Provider == "" || cfg.Default.Provider == name
+		if !makeDef {
+			makeDef = promptConfirm(reader, "Set as default provider?", defIsDefault)
+		}
+		fmt.Println()
+	}
+
+	if endpoint == "" {
+		endpoint = "https://"
+	}
+	if healthPath == "" {
+		healthPath = "/models"
+	}
+	if timeout <= 0 {
+		timeout = 60
+	}
+
+	pcfg := config.ProviderConfig{
+		Type:           "custom",
+		Endpoint:       endpoint,
+		Token:          token,
+		Model:          model,
+		HealthPath:     healthPath,
+		Compatibility:  "openai",
+		TimeoutSeconds: timeout,
+	}
+
+	if !skipTest {
+		fmt.Printf("Testing connection to %s (%s)…\n", styles.Bold.Render(name), pcfg.Endpoint)
+		ok, msg := pingProvider(name, pcfg)
+		if ok {
+			fmt.Printf("  %s Connected%s\n\n", styles.Success.Render("✓"), msg)
+		} else {
+			fmt.Printf("  %s %s\n", styles.Error.Render("✗"), msg)
+			if interactive {
+				if !promptConfirm(reader, "Save configuration anyway?", true) {
+					return fmt.Errorf("configuration aborted by user")
+				}
+				fmt.Println()
+			}
+		}
+	}
+
+	return saveProviderConfig(cfg, name, pcfg, makeDef)
+}
+

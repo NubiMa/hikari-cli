@@ -45,7 +45,7 @@ type UIConfig struct {
 // ProviderConfig holds the configuration for a single provider instance.
 type ProviderConfig struct {
 	// Type identifies which provider implementation to use.
-	// Valid values: "openclaw", "hermes", "ollama"
+	// Valid values: "openclaw", "hermes", "ollama", "custom"
 	Type string `toml:"type"`
 
 	// Endpoint is the base URL for the provider API.
@@ -66,6 +66,16 @@ type ProviderConfig struct {
 	// TLSSkipVerify disables TLS certificate verification.
 	// Use only for development / self-signed certs.
 	TLSSkipVerify bool `toml:"tls_skip_verify"`
+
+	// Compatibility describes the chat API protocol used by this provider.
+	// Only used when Type == "custom".
+	// Currently supported: "openai" (default — OpenAI /chat/completions format).
+	// Future values: "anthropic", "cohere", "raw".
+	Compatibility string `toml:"compatibility"`
+
+	// HealthPath is the URL path used for connection health-checks.
+	// Only used when Type == "custom". Defaults to "/models" when empty.
+	HealthPath string `toml:"health_path"`
 }
 
 // ---------------------------------------------------------------------------
@@ -146,11 +156,12 @@ func validate(cfg *Config) error {
 		"openclaw": true,
 		"hermes":   true,
 		"ollama":   true,
+		"custom":   true,
 	}
 
 	for name, p := range cfg.Providers {
 		if !validTypes[p.Type] {
-			return fmt.Errorf("provider %q has unknown type %q (valid: openclaw, hermes, ollama)", name, p.Type)
+			return fmt.Errorf("provider %q has unknown type %q (valid: openclaw, hermes, ollama, custom)", name, p.Type)
 		}
 		if p.Endpoint == "" {
 			return fmt.Errorf("provider %q missing required field: endpoint", name)
