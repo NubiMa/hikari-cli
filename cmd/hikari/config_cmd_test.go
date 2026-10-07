@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/NubiMa/hikari-cli/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/persona"
 )
 
 func TestConfigOpenClaw(t *testing.T) {
@@ -187,5 +188,77 @@ func TestListPersonasAndThemes(t *testing.T) {
 
 	if err := listThemes(); err != nil {
 		t.Fatalf("listThemes failed: %v", err)
+	}
+}
+
+func TestSavePersonaAndConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HIKARI_CONFIG_DIR", tmpDir)
+
+	cfg := &config.Config{}
+	p := &persona.Persona{
+		Name:         "Super Assistant",
+		Description:  "Fast and witty",
+		Greeting:     "Yo!",
+		SystemPrompt: "You are super fast.",
+		Behavior: persona.Behavior{
+			Tone:     "witty",
+			Language: "English",
+		},
+	}
+
+	err := savePersonaAndConfig(cfg, "super-assistant", p, true)
+	if err != nil {
+		t.Fatalf("savePersonaAndConfig failed: %v", err)
+	}
+
+	// Verify file was written
+	pFile := filepath.Join(tmpDir, "personas", "super-assistant.yaml")
+	loaded, err := persona.LoadFromFile(pFile)
+	if err != nil {
+		t.Fatalf("loading saved persona file failed: %v", err)
+	}
+	if loaded.Name != "Super Assistant" {
+		t.Errorf("expected name 'Super Assistant', got %q", loaded.Name)
+	}
+	if loaded.Greeting != "Yo!" {
+		t.Errorf("expected greeting 'Yo!', got %q", loaded.Greeting)
+	}
+	if loaded.Behavior.Tone != "witty" {
+		t.Errorf("expected tone 'witty', got %q", loaded.Behavior.Tone)
+	}
+
+	// Verify config.toml was updated with active default
+	cfgLoaded, err := config.LoadFrom(filepath.Join(tmpDir, "config.toml"))
+	if err != nil {
+		t.Fatalf("loading config.toml failed: %v", err)
+	}
+	if cfgLoaded.Default.Persona != "super-assistant" {
+		t.Errorf("expected default persona 'super-assistant', got %q", cfgLoaded.Default.Persona)
+	}
+
+	// Verify buildPersonaItems includes super-assistant
+	items := buildPersonaItems()
+	found := false
+	for _, it := range items {
+		if it.id == "super-assistant" {
+			found = true
+			if it.name != "Super Assistant" {
+				t.Errorf("expected item name 'Super Assistant', got %q", it.name)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'super-assistant' to be listed in buildPersonaItems")
+	}
+
+	// Test deleting persona
+	err = deletePersona(cfgLoaded, "super-assistant")
+	if err != nil {
+		t.Fatalf("deletePersona failed: %v", err)
+	}
+	if _, err := os.Stat(pFile); !os.IsNotExist(err) {
+		t.Errorf("expected persona file to be deleted")
 	}
 }

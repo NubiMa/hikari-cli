@@ -109,9 +109,13 @@ func (m *Manager) Active() *Persona {
 
 // List returns all persona names sorted alphabetically.
 func (m *Manager) List() []string {
-	names := make([]string, 0, len(m.personas))
+	seen := make(map[string]bool)
+	var names []string
 	for _, p := range m.personas {
-		names = append(names, p.Name)
+		if !seen[p.Name] {
+			seen[p.Name] = true
+			names = append(names, p.Name)
+		}
 	}
 	sort.Strings(names)
 	return names
@@ -125,9 +129,13 @@ func (m *Manager) Get(name string) (*Persona, bool) {
 
 // All returns all personas as a slice, sorted by name.
 func (m *Manager) All() []*Persona {
-	all := make([]*Persona, 0, len(m.personas))
+	seen := make(map[*Persona]bool)
+	var all []*Persona
 	for _, p := range m.personas {
-		all = append(all, p)
+		if !seen[p] {
+			seen[p] = true
+			all = append(all, p)
+		}
 	}
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].Name < all[j].Name

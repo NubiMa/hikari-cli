@@ -107,10 +107,9 @@ func runConfigMenu() error {
 	options := []configMenuOption{
 		{id: "providers", label: "Providers", sub: provSub},
 		{id: "test", label: "Test Connections", sub: "ping all configured providers"},
-		{id: "persona", label: "Default Persona", sub: personaSub},
+		{id: "persona", label: "Personas", sub: personaSub},
 		{id: "theme", label: "Default Theme", sub: themeSub},
 		{id: "edit", label: "Edit config.toml", sub: "open in $EDITOR"},
-		{id: "edit-persona", label: "Edit Persona", sub: fmt.Sprintf("edit %s in $EDITOR", personaSub)},
 		{id: "edit-theme", label: "Edit Theme", sub: fmt.Sprintf("edit %s in $EDITOR", themeSub)},
 		{id: "path", label: "Show config path", sub: config.ConfigFile()},
 		{id: "setup", label: "Re-run setup wizard", sub: "guided first-run setup"},
@@ -135,13 +134,13 @@ func dispatchConfigAction(id string) error {
 	case "test":
 		return runTestAll()
 	case "persona":
-		return runSetPersona()
+		return runPersonaMenu()
 	case "theme":
 		return runSetTheme()
 	case "edit":
 		return openEditor()
 	case "edit-persona":
-		return openPersonaEditor("")
+		return runPersonaMenu()
 	case "edit-theme":
 		return openThemeEditor("")
 	case "path":
@@ -1053,7 +1052,7 @@ func getPersonaChoices() []struct{ id, label, sub string } {
 	if err == nil {
 		known := map[string]bool{"hikari": true, "developer": true, "sysadmin": true, "default": true}
 		for _, p := range mgr.All() {
-			id := strings.ToLower(p.Name)
+			id := p.ID()
 			if !known[id] {
 				items = append(items, struct{ id, label, sub string }{
 					id:    id,
@@ -1096,33 +1095,401 @@ func getThemeChoices() []struct{ id, label, sub string } {
 	return items
 }
 
+// ---------------------------------------------------------------------------
+// Persona management menu & flows
+// ---------------------------------------------------------------------------
+
+type personaMenuItem struct {
+	id          string
+	name        string
+	description string
+	isBuiltin   bool
+}
+
+func runPersonaMenu() error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{}
+	}
+
+	for {
+		items := buildPersonaItems()
+		action, selected := showPersonaMenu(items, cfg.Default.Persona)
+		switch action {
+		case "add":
+			if err := addPersonaInteractive(cfg); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			}
+			cfg, _ = config.Load()
+		case "edit":
+			if selected != "" {
+				if err := editPersonaInteractive(cfg, selected); err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				}
+				cfg, _ = config.Load()
+			}
+		case "delete":
+			if selected != "" {
+				if err := deletePersona(cfg, selected); err != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				}
+				cfg, _ = config.Load()
+			}
+		case "default":
+			if selected != "" {
+				cfg.Default.Persona = selected
+				if err := config.WriteFromStruct(cfg); err != nil {
+					fmt.Fprintf(os.Stderr, "Error saving: %v\n", err)
+				} else {
+					fmt.Printf("%s Default persona set to %q\n", styles.Success.Render("✓"), selected)
+				}
+				cfg, _ = config.Load()
+			}
+		case "back", "quit", "":
+			return nil
+		}
+	}
+}
+
+func buildPersonaItems() []personaMenuItem {
+	mgr, err := persona.NewManagerDefault()
+	if err != nil {
+		return []personaMenuItem{
+			{id: "hikari", name: "Hikari", description: "Friendly conversational assistant", isBuiltin: true},
+			{id: "developer", name: "Developer", description: "Code-focused assistant", isBuiltin: true},
+			{id: "sysadmin", name: "SysAdmin", description: "System admin expert", isBuiltin: true},
+			{id: "default", name: "Default", description: "Generic helpful assistant", isBuiltin: true},
+		}
+	}
+
+	seen := make(map[string]bool)
+	var items []personaMenuItem
+	for _, p := range mgr.All() {
+		id := p.ID()
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		items = append(items, personaMenuItem{
+			id:          id,
+			name:        p.Name,
+			description: p.Description,
+			isBuiltin:   p.IsBuiltin(),
+		})
+	}
+	return items
+}
+
+type personaMenuModel struct {
+	items      []personaMenuItem
+	cursor     int
+	width      int
+	height     int
+	activeID   string
+	doneAct    string
+	selectedID string
+}
+
+func showPersonaMenu(items []personaMenuItem, activeDefault string) (action, selected string) {
+	m := personaMenuModel{items: items, activeID: activeDefault}
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	result, _ := p.Run()
+	rm, ok := result.(personaMenuModel)
+	if !ok {
+		return "back", ""
+	}
+	return rm.doneAct, rm.selectedID
+}
+
+func (m personaMenuModel) Init() tea.Cmd { return nil }
+
+func (m personaMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			m.doneAct = "back"
+			return m, tea.Quit
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.items) {
+				m.cursor++
+			}
+		case "enter":
+			if m.cursor < len(m.items) {
+				m.selectedID = m.items[m.cursor].id
+				m.doneAct = "default"
+			} else {
+				m.doneAct = "add"
+			}
+			return m, tea.Quit
+		case "s":
+			if m.cursor < len(m.items) {
+				m.selectedID = m.items[m.cursor].id
+				m.doneAct = "default"
+				return m, tea.Quit
+			}
+		case "e":
+			if m.cursor < len(m.items) {
+				m.selectedID = m.items[m.cursor].id
+				m.doneAct = "edit"
+				return m, tea.Quit
+			}
+		case "d":
+			if m.cursor < len(m.items) {
+				m.selectedID = m.items[m.cursor].id
+				m.doneAct = "delete"
+				return m, tea.Quit
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m personaMenuModel) View() string {
+	if m.width == 0 {
+		return "Loading…"
+	}
+	var b strings.Builder
+	b.WriteString(styles.SelectorTitle.Render("◈ PERSONAS"))
+	b.WriteString("\n\n")
+
+	for i, item := range m.items {
+		isDefault := strings.EqualFold(item.id, m.activeID) || (m.activeID == "" && strings.EqualFold(item.id, "hikari"))
+		label := item.name
+		if isDefault {
+			label += " " + styles.Success.Render("[active]")
+		}
+		tag := "(custom)"
+		if item.isBuiltin {
+			tag = "(builtin)"
+		}
+		sub := item.description
+		if sub != "" {
+			sub += "  " + styles.Muted.Render(tag)
+		} else {
+			sub = styles.Muted.Render(tag)
+		}
+
+		if i == m.cursor {
+			b.WriteString(styles.SelectorItemSelected.Render("› " + label))
+			b.WriteString("\n")
+			b.WriteString(styles.Muted.Render("    " + sub))
+		} else {
+			b.WriteString(styles.SelectorItem.Render("  " + label))
+			b.WriteString("\n")
+			b.WriteString(styles.Muted.Render("    " + sub))
+		}
+		b.WriteString("\n")
+	}
+
+	// "Add new" row
+	addLabel := "  + Add new persona"
+	if m.cursor == len(m.items) {
+		addLabel = styles.SelectorItemSelected.Render("› + Add new persona")
+	} else {
+		addLabel = styles.SelectorItem.Render(addLabel)
+	}
+	b.WriteString(addLabel)
+	b.WriteString("\n\n")
+	b.WriteString(styles.Muted.Render("[↑/↓] Navigate  ·  [Enter/s] Set default  ·  [e] Edit  ·  [d] Delete  ·  [Esc] Back"))
+
+	content := styles.SelectorBox.Render(b.String())
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+}
+
+func addPersonaInteractive(cfg *config.Config) error {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println()
+	fmt.Println(styles.Bold.Render("⚙  Create New Persona"))
+	fmt.Println(styles.Muted.Render("Configure identity, greeting, system prompt, and behavior."))
+	fmt.Println()
+
+	id := promptInput(reader, "Persona ID / filename (e.g. expert-coder)", "my-persona")
+	id = strings.TrimSpace(strings.ToLower(id))
+	id = strings.TrimSuffix(id, ".yaml")
+	id = strings.TrimSuffix(id, ".yml")
+	if id == "" {
+		id = "my-persona"
+	}
+
+	defName := strings.ReplaceAll(id, "-", " ")
+	defName = strings.ReplaceAll(defName, "_", " ")
+	words := strings.Fields(defName)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+		}
+	}
+	defName = strings.Join(words, " ")
+
+	name := promptInput(reader, "Display name", defName)
+	desc := promptInput(reader, "Short description", "Custom AI assistant")
+	greeting := promptInput(reader, "Greeting message", "Hello! How can I help you today?")
+	sysPrompt := promptInput(reader, "System prompt", "You are a helpful and knowledgeable AI assistant.")
+	tone := promptInput(reader, "Tone (e.g. casual, precise, concise, technical)", "casual")
+	lang := promptInput(reader, "Language", "English")
+
+	defIsCurrent := cfg.Default.Persona == "" || strings.EqualFold(cfg.Default.Persona, id)
+	makeDef := promptConfirm(reader, "Set as active default persona?", defIsCurrent)
+	fmt.Println()
+
+	p := &persona.Persona{
+		Name:         name,
+		Description:  desc,
+		Greeting:     greeting,
+		SystemPrompt: sysPrompt,
+		Behavior: persona.Behavior{
+			Tone:     tone,
+			Language: lang,
+		},
+	}
+
+	return savePersonaAndConfig(cfg, id, p, makeDef)
+}
+
+func editPersonaInteractive(cfg *config.Config, id string) error {
+	reader := bufio.NewReader(os.Stdin)
+
+	// Load existing persona
+	mgr, _ := persona.NewManagerDefault()
+	var existing *persona.Persona
+	if mgr != nil {
+		existing, _ = mgr.Get(id)
+	}
+	if existing == nil {
+		pPath := filepath.Join(config.PersonasDir(), strings.ToLower(id)+".yaml")
+		existing, _ = persona.LoadFromFile(pPath)
+	}
+
+	defName := id
+	defDesc := ""
+	defGreeting := "Hello! How can I help you today?"
+	defSysPrompt := "You are a helpful AI assistant."
+	defTone := "casual"
+	defLang := "English"
+
+	if existing != nil {
+		if existing.Name != "" {
+			defName = existing.Name
+		}
+		defDesc = existing.Description
+		defGreeting = existing.Greeting
+		defSysPrompt = existing.SystemPrompt
+		if existing.Behavior.Tone != "" {
+			defTone = existing.Behavior.Tone
+		}
+		if existing.Behavior.Language != "" {
+			defLang = existing.Behavior.Language
+		}
+	}
+
+	fmt.Println()
+	fmt.Println(styles.Bold.Render(fmt.Sprintf("⚙  Edit Persona: %s", defName)))
+	fmt.Println(styles.Muted.Render("Press Enter to keep current values, or type new values."))
+	fmt.Println()
+
+	name := promptInput(reader, "Display name", defName)
+	desc := promptInput(reader, "Short description", defDesc)
+	greeting := promptInput(reader, "Greeting message", defGreeting)
+	sysPrompt := promptInput(reader, "System prompt", defSysPrompt)
+	tone := promptInput(reader, "Tone (e.g. casual, precise, concise, technical)", defTone)
+	lang := promptInput(reader, "Language", defLang)
+
+	isCurrentDefault := strings.EqualFold(cfg.Default.Persona, id)
+	makeDef := promptConfirm(reader, "Set as active default persona?", isCurrentDefault)
+	fmt.Println()
+
+	p := &persona.Persona{
+		Name:         name,
+		Description:  desc,
+		Greeting:     greeting,
+		SystemPrompt: sysPrompt,
+		Behavior: persona.Behavior{
+			Tone:     tone,
+			Language: lang,
+		},
+	}
+
+	return savePersonaAndConfig(cfg, id, p, makeDef)
+}
+
+func savePersonaAndConfig(cfg *config.Config, id string, p *persona.Persona, makeDefault bool) error {
+	if err := config.EnsureDirs(); err != nil {
+		return fmt.Errorf("ensuring config dirs: %w", err)
+	}
+
+	filePath := filepath.Join(config.PersonasDir(), strings.ToLower(id)+".yaml")
+	if err := persona.SaveToFile(p, filePath); err != nil {
+		return fmt.Errorf("saving persona: %w", err)
+	}
+
+	if makeDefault || cfg.Default.Persona == "" {
+		cfg.Default.Persona = strings.ToLower(id)
+		if err := config.WriteFromStruct(cfg); err != nil {
+			return fmt.Errorf("updating default persona in config: %w", err)
+		}
+	}
+
+	fmt.Printf("%s Persona %s (%s) saved!\n", styles.Success.Render("✓"), styles.Bold.Render(p.Name), id)
+	if strings.EqualFold(cfg.Default.Persona, id) {
+		fmt.Printf("  Active default: %s\n", styles.Bold.Render(id))
+	}
+	fmt.Printf("  File:           %s\n\n", filePath)
+	return nil
+}
+
+func deletePersona(cfg *config.Config, id string) error {
+	id = strings.ToLower(id)
+	userFile := filepath.Join(config.PersonasDir(), id+".yaml")
+	if _, err := os.Stat(userFile); os.IsNotExist(err) {
+		mgr, _ := persona.NewManagerDefault()
+		if mgr != nil {
+			if p, ok := mgr.Get(id); ok && p.IsBuiltin() {
+				fmt.Printf("%s Cannot delete built-in persona %q\n", styles.Error.Render("✗"), id)
+				return nil
+			}
+		}
+		fmt.Printf("%s Persona file %s not found\n", styles.Error.Render("✗"), userFile)
+		return nil
+	}
+
+	if err := os.Remove(userFile); err != nil {
+		return fmt.Errorf("deleting persona file: %w", err)
+	}
+
+	fmt.Printf("%s Removed persona %q\n", styles.Success.Render("✓"), id)
+	if strings.EqualFold(cfg.Default.Persona, id) {
+		cfg.Default.Persona = "hikari"
+		_ = config.WriteFromStruct(cfg)
+		fmt.Printf("  Default persona reset to %q\n", "hikari")
+	}
+	return nil
+}
+
 func runSetPersona(target ...string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		cfg = &config.Config{}
 	}
 
-	var chosen string
 	if len(target) > 0 && strings.TrimSpace(target[0]) != "" {
-		chosen = strings.TrimSpace(strings.ToLower(target[0]))
-	} else {
-		items := getPersonaChoices()
-		var action string
-		chosen, action = pickFromListWithAction("Select Default Persona", items, cfg.Default.Persona, true)
-		if action == "edit" {
-			return openPersonaEditor(chosen)
+		chosen := strings.TrimSpace(strings.ToLower(target[0]))
+		cfg.Default.Persona = chosen
+		if err := config.WriteFromStruct(cfg); err != nil {
+			return err
 		}
-		if chosen == "" || action == "cancel" {
-			return nil
-		}
+		fmt.Printf("%s Default persona set to %q\n", styles.Success.Render("✓"), chosen)
+		return nil
 	}
 
-	cfg.Default.Persona = chosen
-	if err := config.WriteFromStruct(cfg); err != nil {
-		return err
-	}
-	fmt.Printf("%s Default persona set to %q\n", styles.Success.Render("✓"), chosen)
-	return nil
+	return runPersonaMenu()
 }
 
 func runSetTheme(target ...string) error {
@@ -1219,7 +1586,7 @@ func openPersonaEditor(name string) error {
 		if data, err := assets.Personas.ReadFile(embedPath); err == nil {
 			content = data
 		} else {
-			content = []byte(fmt.Sprintf(`name: %s
+			content = fmt.Appendf(nil, `name: %s
 description: Custom persona
 greeting: "Hello! How can I help you today?"
 system_prompt: |
@@ -1227,7 +1594,7 @@ system_prompt: |
 behavior:
   tone: casual
   language: English
-`, name))
+`, name)
 		}
 		if err := os.WriteFile(targetPath, content, 0600); err != nil {
 			return fmt.Errorf("creating persona file: %w", err)
@@ -1259,7 +1626,7 @@ func openThemeEditor(name string) error {
 		if data, err := assets.Themes.ReadFile(embedPath); err == nil {
 			content = data
 		} else {
-			content = []byte(fmt.Sprintf(`name = "%s"
+			content = fmt.Appendf(nil, `name = "%s"
 description = "Custom Hikari theme"
 
 [colors]
@@ -1277,7 +1644,7 @@ error       = "#F87171"
 warning     = "#FBBF24"
 border      = "#4C1D95"
 background  = "#0F0F1A"
-`, name))
+`, name)
 		}
 		if err := os.WriteFile(targetPath, content, 0600); err != nil {
 			return fmt.Errorf("creating theme file: %w", err)
@@ -1468,37 +1835,108 @@ func configPersonaCmd() *cobra.Command {
 		name string
 		list bool
 		edit bool
+		add  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "persona [name]",
-		Short: "Set or edit the default persona (auto-updates config.toml)",
-		Long: `Configure, select, or edit personas.
-Can be run interactively or with command-line flags/arguments.
+		Short: "Manage personas (select, add, edit, delete)",
+		Long: `Manage Hikari personas interactively.
+Create custom personas, edit system prompts & greetings, or set the active default.
+
+Commands & Usage:
+  hikari config persona               Open interactive persona manager
+  hikari config persona <name>        Set active default persona
+  hikari config persona add           Add a new persona interactively
+  hikari config persona edit [name]   Edit an existing persona interactively
+  hikari config persona list          List available personas
 
 Examples:
-  hikari config persona               # Interactive picker ([Enter] select, [e] edit)
-  hikari config persona developer     # Set default persona to developer
-  hikari config persona --edit        # Edit active persona in $EDITOR
-  hikari config persona --list        # List available personas
+  hikari config persona
+  hikari config persona developer
+  hikari config persona add
+  hikari config persona edit hikari
+  hikari config persona list
 `,
-		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if list {
 				return listPersonas()
 			}
-			target := name
-			if len(args) > 0 {
-				target = args[0]
+			cfg, err := config.Load()
+			if err != nil {
+				cfg = &config.Config{}
+			}
+			if add {
+				return addPersonaInteractive(cfg)
 			}
 			if edit {
-				return openPersonaEditor(target)
+				target := name
+				if len(args) > 0 {
+					target = args[0]
+				}
+				if target == "" {
+					target = cfg.Default.Persona
+				}
+				if target == "" {
+					target = "hikari"
+				}
+				return editPersonaInteractive(cfg, target)
 			}
-			return runSetPersona(target)
+			if len(args) > 0 {
+				return runSetPersona(args[0])
+			}
+			if name != "" {
+				return runSetPersona(name)
+			}
+			return runPersonaMenu()
 		},
 	}
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Persona name to set as default")
 	cmd.Flags().BoolVarP(&list, "list", "l", false, "List available personas")
-	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "Open persona configuration file in $EDITOR")
+	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "Edit persona interactively")
+	cmd.Flags().BoolVarP(&add, "add", "a", false, "Add new persona interactively")
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "add",
+		Short: "Add a new persona interactively",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				cfg = &config.Config{}
+			}
+			return addPersonaInteractive(cfg)
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "edit [name]",
+		Short: "Edit an existing persona interactively",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				cfg = &config.Config{}
+			}
+			target := ""
+			if len(args) > 0 {
+				target = args[0]
+			}
+			if target == "" {
+				target = cfg.Default.Persona
+			}
+			if target == "" {
+				target = "hikari"
+			}
+			return editPersonaInteractive(cfg, target)
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List all available personas",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return listPersonas()
+		},
+	})
+
 	return cmd
 }
 

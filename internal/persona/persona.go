@@ -43,8 +43,19 @@ type Persona struct {
 	// Behavior controls tone, language, and style.
 	Behavior Behavior `yaml:"behavior"`
 
+	// id tracks the filename/identifier of the persona.
+	id string
+
 	// source tracks where this persona was loaded from (for display).
 	source string
+}
+
+// ID returns the identifier/filename of the persona.
+func (p *Persona) ID() string {
+	if p.id != "" {
+		return p.id
+	}
+	return strings.ToLower(p.Name)
 }
 
 // IsBuiltin reports whether the persona was loaded from bundled assets.
@@ -63,6 +74,7 @@ func LoadFromBytes(data []byte, fallbackName, source string) (*Persona, error) {
 	if p.Name == "" {
 		p.Name = fallbackName
 	}
+	p.id = strings.ToLower(fallbackName)
 	p.source = source
 	return &p, nil
 }
@@ -109,6 +121,10 @@ func LoadDir(dir string, source string) (map[string]*Persona, error) {
 		p.source = source
 		key := strings.ToLower(p.Name)
 		result[key] = p
+		fallbackKey := strings.ToLower(strings.TrimSuffix(name, filepath.Ext(name)))
+		if _, ok := result[fallbackKey]; !ok {
+			result[fallbackKey] = p
+		}
 	}
 	return result, nil
 }
@@ -145,6 +161,25 @@ func LoadEmbedFS(fsys fs.ReadDirFS, dir string, source string) (map[string]*Pers
 		}
 		key := strings.ToLower(p.Name)
 		result[key] = p
+		fallbackKey := strings.ToLower(fallback)
+		if _, ok := result[fallbackKey]; !ok {
+			result[fallbackKey] = p
+		}
 	}
 	return result, nil
+}
+
+// SaveToFile writes a persona definition to a YAML file.
+func SaveToFile(p *Persona, path string) error {
+	data, err := yaml.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("persona: marshaling YAML: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("persona: creating dir: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("persona: writing %s: %w", path, err)
+	}
+	return nil
 }
