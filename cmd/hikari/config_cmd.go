@@ -1237,14 +1237,14 @@ func configSetupCmd() *cobra.Command {
 
 func configCustomCmd() *cobra.Command {
 	var (
-		name        string
-		endpoint    string
-		token       string
-		model       string
-		healthPath  string
-		timeout     int
-		makeDef     bool
-		skipTest    bool
+		name       string
+		endpoint   string
+		token      string
+		model      string
+		healthPath string
+		timeout    int
+		makeDef    bool
+		skipTest   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "custom",
@@ -1404,4 +1404,3 @@ func runConfigureCustom(name, endpoint, token, model, healthPath string, timeout
 
 	return saveProviderConfig(cfg, name, pcfg, makeDef)
 }
-
