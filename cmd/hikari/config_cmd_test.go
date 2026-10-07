@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -103,5 +104,88 @@ func TestConfigOllama(t *testing.T) {
 	}
 	if cfg.Default.Provider != "my-ollama" {
 		t.Errorf("expected default provider my-ollama, got %s", cfg.Default.Provider)
+	}
+}
+
+func TestConfigPersonaDirect(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HIKARI_CONFIG_DIR", tmpDir)
+
+	err := runSetPersona("developer")
+	if err != nil {
+		t.Fatalf("runSetPersona failed: %v", err)
+	}
+
+	cfg, err := config.LoadFrom(filepath.Join(tmpDir, "config.toml"))
+	if err != nil {
+		t.Fatalf("loading saved config failed: %v", err)
+	}
+
+	if cfg.Default.Persona != "developer" {
+		t.Errorf("expected default persona developer, got %s", cfg.Default.Persona)
+	}
+}
+
+func TestConfigThemeDirect(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HIKARI_CONFIG_DIR", tmpDir)
+
+	err := runSetTheme("tokyo-night")
+	if err != nil {
+		t.Fatalf("runSetTheme failed: %v", err)
+	}
+
+	cfg, err := config.LoadFrom(filepath.Join(tmpDir, "config.toml"))
+	if err != nil {
+		t.Fatalf("loading saved config failed: %v", err)
+	}
+
+	if cfg.UI.Theme != "tokyo-night" {
+		t.Errorf("expected default theme tokyo-night, got %s", cfg.UI.Theme)
+	}
+}
+
+func TestOpenPersonaEditor(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HIKARI_CONFIG_DIR", tmpDir)
+	t.Setenv("EDITOR", "true")
+
+	err := openPersonaEditor("custom-bot")
+	if err != nil {
+		t.Fatalf("openPersonaEditor failed: %v", err)
+	}
+
+	personaFile := filepath.Join(tmpDir, "personas", "custom-bot.yaml")
+	if _, err := os.Stat(personaFile); os.IsNotExist(err) {
+		t.Fatalf("expected persona file %s to be created", personaFile)
+	}
+}
+
+func TestOpenThemeEditor(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HIKARI_CONFIG_DIR", tmpDir)
+	t.Setenv("EDITOR", "true")
+
+	err := openThemeEditor("my-theme")
+	if err != nil {
+		t.Fatalf("openThemeEditor failed: %v", err)
+	}
+
+	themeFile := filepath.Join(tmpDir, "themes", "my-theme.toml")
+	if _, err := os.Stat(themeFile); os.IsNotExist(err) {
+		t.Fatalf("expected theme file %s to be created", themeFile)
+	}
+}
+
+func TestListPersonasAndThemes(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HIKARI_CONFIG_DIR", tmpDir)
+
+	if err := listPersonas(); err != nil {
+		t.Fatalf("listPersonas failed: %v", err)
+	}
+
+	if err := listThemes(); err != nil {
+		t.Fatalf("listThemes failed: %v", err)
 	}
 }

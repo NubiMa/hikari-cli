@@ -140,10 +140,12 @@ hikari config hermes --endpoint http://127.0.0.1:8080 --default
 | `hikari config` | Open interactive configuration menu |
 | `hikari config provider` | Interactive provider manager (test, set default, delete, add) |
 | `hikari config provider list` | List all configured providers and the active default |
+| `hikari config persona` | Select default persona interactively, set by name, or edit with `--edit` |
+| `hikari config theme` | Select default UI theme interactively, set by name, or edit with `--edit` |
 | `hikari config test` | Ping all configured providers and verify connection latencies |
 | `hikari config test <name>` | Ping a specific provider |
 | `hikari config setup` | Re-run the interactive first-run setup wizard |
-| `hikari config edit` | Open `config.toml` in your default `$EDITOR` |
+| `hikari config edit` | Open `config.toml` (or `persona` / `theme`) in your default `$EDITOR` |
 | `hikari config path` | Print the exact path to `config.toml` on your system |
 | `hikari --init` | Generate default directory structure and skeleton config |
 

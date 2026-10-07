@@ -6,16 +6,20 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/NubiMa/hikari-cli/assets"
 	"github.com/NubiMa/hikari-cli/internal/config"
+	"github.com/NubiMa/hikari-cli/internal/persona"
 	"github.com/NubiMa/hikari-cli/internal/provider"
 	"github.com/NubiMa/hikari-cli/internal/provider/custom"
 	"github.com/NubiMa/hikari-cli/internal/provider/hermes"
 	"github.com/NubiMa/hikari-cli/internal/provider/ollama"
 	"github.com/NubiMa/hikari-cli/internal/provider/openclaw"
+	"github.com/NubiMa/hikari-cli/internal/theme"
 	"github.com/NubiMa/hikari-cli/internal/tui/styles"
 	"github.com/NubiMa/hikari-cli/internal/wizard"
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,9 +40,12 @@ Subcommands:
   hikari config openclaw    Configure OpenClaw provider (auto-updates config.toml)
   hikari config hermes      Configure Hermes provider (auto-updates config.toml)
   hikari config ollama      Configure Ollama provider (auto-updates config.toml)
+  hikari config custom      Configure custom/OpenAI-compatible provider (auto-updates config.toml)
   hikari config provider    Manage AI providers interactively
+  hikari config persona     Set or edit default persona (auto-updates config.toml)
+  hikari config theme       Set or edit default UI theme (auto-updates config.toml)
   hikari config test        Ping all configured providers
-  hikari config edit        Open config.toml in $EDITOR
+  hikari config edit        Open config.toml, persona, or theme in $EDITOR
   hikari config path        Print the config file path
   hikari config setup       Re-run the first-run setup wizard`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -52,6 +59,8 @@ Subcommands:
 	root.AddCommand(configOllamaCmd())
 	root.AddCommand(configCustomCmd())
 	root.AddCommand(configProviderCmd())
+	root.AddCommand(configPersonaCmd())
+	root.AddCommand(configThemeCmd())
 	root.AddCommand(configTestCmd())
 	root.AddCommand(configEditCmd())
 	root.AddCommand(configPathCmd())
@@ -101,6 +110,8 @@ func runConfigMenu() error {
 		{id: "persona", label: "Default Persona", sub: personaSub},
 		{id: "theme", label: "Default Theme", sub: themeSub},
 		{id: "edit", label: "Edit config.toml", sub: "open in $EDITOR"},
+		{id: "edit-persona", label: "Edit Persona", sub: fmt.Sprintf("edit %s in $EDITOR", personaSub)},
+		{id: "edit-theme", label: "Edit Theme", sub: fmt.Sprintf("edit %s in $EDITOR", themeSub)},
 		{id: "path", label: "Show config path", sub: config.ConfigFile()},
 		{id: "setup", label: "Re-run setup wizard", sub: "guided first-run setup"},
 		{id: "quit", label: "Exit", sub: ""},
@@ -129,6 +140,10 @@ func dispatchConfigAction(id string) error {
 		return runSetTheme()
 	case "edit":
 		return openEditor()
+	case "edit-persona":
+		return openPersonaEditor("")
+	case "edit-theme":
+		return openThemeEditor("")
 	case "path":
 		fmt.Println(config.ConfigFile())
 		return nil
@@ -924,13 +939,15 @@ func testProvider(name string, pcfg config.ProviderConfig) {
 // ---------------------------------------------------------------------------
 
 type simplePickerModel struct {
-	title    string
-	items    []struct{ id, label, sub string }
-	cursor   int
-	activeID string
-	chosen   string
-	width    int
-	height   int
+	title     string
+	items     []struct{ id, label, sub string }
+	cursor    int
+	activeID  string
+	chosen    string
+	action    string // "select", "edit", or "cancel"
+	allowEdit bool
+	width     int
+	height    int
 }
 
 func (m simplePickerModel) Init() tea.Cmd { return nil }
@@ -944,7 +961,14 @@ func (m simplePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
 			m.chosen = ""
+			m.action = "cancel"
 			return m, tea.Quit
+		case "e":
+			if m.allowEdit && len(m.items) > 0 && m.cursor < len(m.items) {
+				m.chosen = m.items[m.cursor].id
+				m.action = "edit"
+				return m, tea.Quit
+			}
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
@@ -954,7 +978,10 @@ func (m simplePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter":
-			m.chosen = m.items[m.cursor].id
+			if len(m.items) > 0 && m.cursor < len(m.items) {
+				m.chosen = m.items[m.cursor].id
+				m.action = "select"
+			}
 			return m, tea.Quit
 		}
 	}
@@ -988,25 +1015,33 @@ func (m simplePickerModel) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(styles.Muted.Render("[↑/↓] Navigate  ·  [Enter] Select  ·  [Esc] Cancel"))
+	if m.allowEdit {
+		b.WriteString(styles.Muted.Render("[↑/↓] Navigate  ·  [Enter] Select  ·  [e] Edit file  ·  [Esc] Cancel"))
+	} else {
+		b.WriteString(styles.Muted.Render("[↑/↓] Navigate  ·  [Enter] Select  ·  [Esc] Cancel"))
+	}
 
 	content := styles.SelectorBox.Render(b.String())
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
 
 func pickFromList(title string, items []struct{ id, label, sub string }, activeID string) string {
-	m := simplePickerModel{title: title, items: items, activeID: activeID}
-	p := tea.NewProgram(m, tea.WithAltScreen())
-	result, _ := p.Run()
-	return result.(simplePickerModel).chosen
+	chosen, _ := pickFromListWithAction(title, items, activeID, false)
+	return chosen
 }
 
-func runSetPersona() error {
-	cfg, err := config.Load()
+func pickFromListWithAction(title string, items []struct{ id, label, sub string }, activeID string, allowEdit bool) (string, string) {
+	m := simplePickerModel{title: title, items: items, activeID: activeID, allowEdit: allowEdit}
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	result, err := p.Run()
 	if err != nil {
-		return err
+		return "", "cancel"
 	}
+	res := result.(simplePickerModel)
+	return res.chosen, res.action
+}
 
+func getPersonaChoices() []struct{ id, label, sub string } {
 	items := []struct{ id, label, sub string }{
 		{"hikari", "Hikari", "Friendly conversational assistant — warm and helpful"},
 		{"developer", "Developer", "Code-focused assistant — concise, technical, precise"},
@@ -1014,9 +1049,72 @@ func runSetPersona() error {
 		{"default", "Default", "Generic helpful assistant — neutral and balanced"},
 	}
 
-	chosen := pickFromList("Select Default Persona", items, cfg.Default.Persona)
-	if chosen == "" {
-		return nil
+	mgr, err := persona.NewManagerDefault()
+	if err == nil {
+		known := map[string]bool{"hikari": true, "developer": true, "sysadmin": true, "default": true}
+		for _, p := range mgr.All() {
+			id := strings.ToLower(p.Name)
+			if !known[id] {
+				items = append(items, struct{ id, label, sub string }{
+					id:    id,
+					label: p.Name,
+					sub:   p.Description,
+				})
+				known[id] = true
+			}
+		}
+	}
+	return items
+}
+
+func getThemeChoices() []struct{ id, label, sub string } {
+	items := []struct{ id, label, sub string }{
+		{"default", "Default (Violet)", "Deep violet and indigo — the classic Hikari look"},
+		{"minimal", "Minimal", "Low-contrast, distraction-free monochrome"},
+		{"tokyo-night", "Tokyo Night", "Inspired by the popular VS Code Tokyo Night palette"},
+	}
+
+	tm, err := theme.NewManagerDefault()
+	if err == nil {
+		known := map[string]bool{"default": true, "minimal": true, "tokyo-night": true}
+		for _, t := range tm.All() {
+			id := strings.ToLower(t.Name)
+			if !known[id] {
+				sub := t.Description
+				if sub == "" {
+					sub = fmt.Sprintf("User theme: %s", t.Name)
+				}
+				items = append(items, struct{ id, label, sub string }{
+					id:    id,
+					label: t.Name,
+					sub:   sub,
+				})
+				known[id] = true
+			}
+		}
+	}
+	return items
+}
+
+func runSetPersona(target ...string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{}
+	}
+
+	var chosen string
+	if len(target) > 0 && strings.TrimSpace(target[0]) != "" {
+		chosen = strings.TrimSpace(strings.ToLower(target[0]))
+	} else {
+		items := getPersonaChoices()
+		var action string
+		chosen, action = pickFromListWithAction("Select Default Persona", items, cfg.Default.Persona, true)
+		if action == "edit" {
+			return openPersonaEditor(chosen)
+		}
+		if chosen == "" || action == "cancel" {
+			return nil
+		}
 	}
 
 	cfg.Default.Persona = chosen
@@ -1027,21 +1125,25 @@ func runSetPersona() error {
 	return nil
 }
 
-func runSetTheme() error {
+func runSetTheme(target ...string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		cfg = &config.Config{}
 	}
 
-	items := []struct{ id, label, sub string }{
-		{"default", "Default (Violet)", "Deep violet and indigo — the classic Hikari look"},
-		{"minimal", "Minimal", "Low-contrast, distraction-free monochrome"},
-		{"tokyo-night", "Tokyo Night", "Inspired by the popular VS Code Tokyo Night palette"},
-	}
-
-	chosen := pickFromList("Select Default Theme", items, cfg.UI.Theme)
-	if chosen == "" {
-		return nil
+	var chosen string
+	if len(target) > 0 && strings.TrimSpace(target[0]) != "" {
+		chosen = strings.TrimSpace(strings.ToLower(target[0]))
+	} else {
+		items := getThemeChoices()
+		var action string
+		chosen, action = pickFromListWithAction("Select Default Theme", items, cfg.UI.Theme, true)
+		if action == "edit" {
+			return openThemeEditor(chosen)
+		}
+		if chosen == "" || action == "cancel" {
+			return nil
+		}
 	}
 
 	cfg.UI.Theme = chosen
@@ -1050,6 +1152,140 @@ func runSetTheme() error {
 	}
 	fmt.Printf("%s Theme set to %q\n", styles.Success.Render("✓"), chosen)
 	return nil
+}
+
+func listPersonas() error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{}
+	}
+	items := getPersonaChoices()
+	fmt.Println(styles.Bold.Render("Available Personas:"))
+	fmt.Println()
+	for _, it := range items {
+		active := ""
+		if strings.EqualFold(it.id, cfg.Default.Persona) || (cfg.Default.Persona == "" && it.id == "default") {
+			active = " " + styles.Success.Render("[active]")
+		}
+		fmt.Printf("  • %s (%s)%s\n", styles.Bold.Render(it.label), it.id, active)
+		if it.sub != "" {
+			fmt.Printf("    %s\n", styles.Muted.Render(it.sub))
+		}
+	}
+	fmt.Println()
+	return nil
+}
+
+func listThemes() error {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = &config.Config{}
+	}
+	items := getThemeChoices()
+	fmt.Println(styles.Bold.Render("Available Themes:"))
+	fmt.Println()
+	for _, it := range items {
+		active := ""
+		if strings.EqualFold(it.id, cfg.UI.Theme) || (cfg.UI.Theme == "" && it.id == "default") {
+			active = " " + styles.Success.Render("[active]")
+		}
+		fmt.Printf("  • %s (%s)%s\n", styles.Bold.Render(it.label), it.id, active)
+		if it.sub != "" {
+			fmt.Printf("    %s\n", styles.Muted.Render(it.sub))
+		}
+	}
+	fmt.Println()
+	return nil
+}
+
+func openPersonaEditor(name string) error {
+	if err := config.EnsureDirs(); err != nil {
+		return fmt.Errorf("ensuring config dirs: %w", err)
+	}
+
+	cfg, _ := config.Load()
+	if name == "" && cfg != nil && cfg.Default.Persona != "" {
+		name = cfg.Default.Persona
+	}
+	if name == "" {
+		name = "hikari"
+	}
+	name = strings.ToLower(name)
+
+	targetPath := filepath.Join(config.PersonasDir(), name+".yaml")
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		embedPath := "personas/" + name + ".yaml"
+		var content []byte
+		if data, err := assets.Personas.ReadFile(embedPath); err == nil {
+			content = data
+		} else {
+			content = []byte(fmt.Sprintf(`name: %s
+description: Custom persona
+greeting: "Hello! How can I help you today?"
+system_prompt: |
+  You are a helpful AI assistant.
+behavior:
+  tone: casual
+  language: English
+`, name))
+		}
+		if err := os.WriteFile(targetPath, content, 0600); err != nil {
+			return fmt.Errorf("creating persona file: %w", err)
+		}
+		fmt.Printf("Created user persona template at %s\n", targetPath)
+	}
+
+	return openEditor(targetPath)
+}
+
+func openThemeEditor(name string) error {
+	if err := config.EnsureDirs(); err != nil {
+		return fmt.Errorf("ensuring config dirs: %w", err)
+	}
+
+	cfg, _ := config.Load()
+	if name == "" && cfg != nil && cfg.UI.Theme != "" {
+		name = cfg.UI.Theme
+	}
+	if name == "" {
+		name = "default"
+	}
+	name = strings.ToLower(name)
+
+	targetPath := filepath.Join(config.ThemesDir(), name+".toml")
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		embedPath := "themes/" + name + ".toml"
+		var content []byte
+		if data, err := assets.Themes.ReadFile(embedPath); err == nil {
+			content = data
+		} else {
+			content = []byte(fmt.Sprintf(`name = "%s"
+description = "Custom Hikari theme"
+
+[colors]
+primary     = "#7C3AED"
+accent      = "#A78BFA"
+dim         = "#6B7280"
+subtle      = "#374151"
+text        = "#F9FAFB"
+text_muted  = "#9CA3AF"
+user        = "#34D399"
+assistant   = "#A78BFA"
+system      = "#FCD34D"
+success     = "#10B981"
+error       = "#F87171"
+warning     = "#FBBF24"
+border      = "#4C1D95"
+background  = "#0F0F1A"
+`, name))
+		}
+		if err := os.WriteFile(targetPath, content, 0600); err != nil {
+			return fmt.Errorf("creating theme file: %w", err)
+		}
+		fmt.Printf("Created user theme template at %s\n", targetPath)
+	}
+
+	return openEditor(targetPath)
 }
 
 // ---------------------------------------------------------------------------
@@ -1080,7 +1316,7 @@ func runTestAll() error {
 // Open editor
 // ---------------------------------------------------------------------------
 
-func openEditor() error {
+func openEditor(filePath ...string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = os.Getenv("VISUAL")
@@ -1089,14 +1325,16 @@ func openEditor() error {
 		editor = "nano"
 	}
 
-	cfgPath := config.ConfigFile()
-	if !config.Exists() {
+	target := config.ConfigFile()
+	if len(filePath) > 0 && filePath[0] != "" {
+		target = filePath[0]
+	} else if !config.Exists() {
 		if err := config.WriteDefault(); err != nil {
 			return err
 		}
 	}
 
-	cmd := exec.Command(editor, cfgPath) //nolint:gosec // editor is from user env
+	cmd := exec.Command(editor, target) //nolint:gosec // editor is from user env
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -1196,12 +1434,111 @@ func configTestCmd() *cobra.Command {
 
 func configEditCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "edit",
-		Short: "Open config.toml in $EDITOR",
+		Use:   "edit [target]",
+		Short: "Open config file in $EDITOR (config.toml, persona, or theme)",
+		Long: `Open configuration files in $EDITOR.
+
+Targets:
+  hikari config edit            Open config.toml
+  hikari config edit persona    Open active persona configuration file
+  hikari config edit theme      Open active theme configuration file
+`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return openEditor()
+			if len(args) == 0 {
+				return openEditor()
+			}
+			target := strings.ToLower(args[0])
+			switch target {
+			case "persona", "personas":
+				return openPersonaEditor("")
+			case "theme", "themes":
+				return openThemeEditor("")
+			case "config", "config.toml":
+				return openEditor()
+			default:
+				return fmt.Errorf("unknown edit target %q; expected 'persona', 'theme', or leave empty for config.toml", args[0])
+			}
 		},
 	}
+}
+
+func configPersonaCmd() *cobra.Command {
+	var (
+		name string
+		list bool
+		edit bool
+	)
+	cmd := &cobra.Command{
+		Use:   "persona [name]",
+		Short: "Set or edit the default persona (auto-updates config.toml)",
+		Long: `Configure, select, or edit personas.
+Can be run interactively or with command-line flags/arguments.
+
+Examples:
+  hikari config persona               # Interactive picker ([Enter] select, [e] edit)
+  hikari config persona developer     # Set default persona to developer
+  hikari config persona --edit        # Edit active persona in $EDITOR
+  hikari config persona --list        # List available personas
+`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if list {
+				return listPersonas()
+			}
+			target := name
+			if len(args) > 0 {
+				target = args[0]
+			}
+			if edit {
+				return openPersonaEditor(target)
+			}
+			return runSetPersona(target)
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "", "Persona name to set as default")
+	cmd.Flags().BoolVarP(&list, "list", "l", false, "List available personas")
+	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "Open persona configuration file in $EDITOR")
+	return cmd
+}
+
+func configThemeCmd() *cobra.Command {
+	var (
+		name string
+		list bool
+		edit bool
+	)
+	cmd := &cobra.Command{
+		Use:   "theme [name]",
+		Short: "Set or edit the default UI theme (auto-updates config.toml)",
+		Long: `Configure, select, or edit UI themes.
+Can be run interactively or with command-line flags/arguments.
+
+Examples:
+  hikari config theme               # Interactive picker ([Enter] select, [e] edit)
+  hikari config theme tokyo-night   # Set default theme to tokyo-night
+  hikari config theme --edit        # Edit active theme in $EDITOR
+  hikari config theme --list        # List available themes
+`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if list {
+				return listThemes()
+			}
+			target := name
+			if len(args) > 0 {
+				target = args[0]
+			}
+			if edit {
+				return openThemeEditor(target)
+			}
+			return runSetTheme(target)
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "", "Theme name to set as default")
+	cmd.Flags().BoolVarP(&list, "list", "l", false, "List available themes")
+	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "Open theme configuration file in $EDITOR")
+	return cmd
 }
 
 func configPathCmd() *cobra.Command {

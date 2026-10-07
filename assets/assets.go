@@ -11,6 +11,11 @@ import "embed"
 //go:embed personas/*.yaml
 var Personas embed.FS
 
+// Themes contains the bundled built-in theme TOML files.
+//
+//go:embed themes/*.toml
+var Themes embed.FS
+
 // ASCII contains the bundled ASCII art banner text files.
 //
 //go:embed ascii/*.txt
