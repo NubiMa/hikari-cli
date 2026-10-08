@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/NubiMa/hikari-cli/internal/app"
+	"github.com/NubiMa/hikari-cli/internal/config"
 	"github.com/NubiMa/hikari-cli/internal/provider"
 	"github.com/NubiMa/hikari-cli/internal/session"
 	"github.com/NubiMa/hikari-cli/internal/stream"
@@ -32,6 +34,8 @@ const (
 	modePersonaSelector
 	modeModelSelector
 	modeSessionSelector
+	modeSessionManager
+	modeHistoryBrowser
 	modeThemeSelector
 	modeHelp
 	modeStatus
@@ -52,9 +56,11 @@ type Model struct {
 	showSidebar bool
 
 	// Components
-	chatView components.ChatView
-	input    components.InputModel
-	selector components.Selector
+	chatView       components.ChatView
+	input          components.InputModel
+	selector       components.Selector
+	sessionMgr     components.SessionManager
+	historyBrowser components.HistoryBrowser
 
 	// State
 	mode        viewMode
@@ -161,6 +167,99 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.SetWidth(msg.Width)
 		m.selector.Width = msg.Width
 		m.selector.Height = msg.Height
+		m.sessionMgr.Width = msg.Width
+		m.sessionMgr.Height = msg.Height
+		m.historyBrowser.Width = msg.Width
+		m.historyBrowser.Height = msg.Height
+		return m, nil
+
+	// -- Modal loaders --
+	case sessionEntriesLoadedMsg:
+		m.sessionMgr = components.NewSessionManager(msg.entries, m.session.ID, m.width, m.height)
+		m.mode = modeSessionManager
+		return m, nil
+
+	case historyLoadedMsg:
+		m.historyBrowser = components.NewHistoryBrowser(msg.entries, m.session.ID, m.app.Sessions.Load, m.width, m.height)
+		m.mode = modeHistoryBrowser
+		return m, nil
+
+	case modelsLoadedMsg:
+		m.selector = components.Selector{
+			Title:   "Select Model",
+			Context: "model",
+			Items:   msg.items,
+			Width:   m.width,
+			Height:  m.height,
+		}
+		m.mode = modeModelSelector
+		return m, nil
+
+	// -- Session Manager events --
+	case components.SessionSwitchMsg:
+		m.mode = modeChat
+		if err := m.resumeSession(msg.ID); err != nil {
+			m.statusMsg = "Failed to switch session: " + sanitiseError(err)
+			m.isError = true
+		}
+		return m, nil
+
+	case components.SessionNewMsg:
+		m.mode = modeChat
+		return m.homeSession()
+
+	case components.SessionRenameMsg:
+		if err := m.app.Sessions.Rename(msg.ID, msg.NewTitle); err != nil {
+			m.statusMsg = "Failed to rename: " + sanitiseError(err)
+			m.isError = true
+			return m, nil
+		}
+		if m.session.ID == msg.ID {
+			m.session.Title = msg.NewTitle
+		}
+		m.statusMsg = fmt.Sprintf("Renamed session to %q", msg.NewTitle)
+		return m, nil
+
+	case components.SessionDeleteMsg:
+		if err := m.app.Sessions.Delete(msg.ID); err != nil {
+			m.statusMsg = "Failed to delete: " + sanitiseError(err)
+			m.isError = true
+			return m, nil
+		}
+		if m.session.ID == msg.ID {
+			return m.homeSession()
+		}
+		m.statusMsg = "Session deleted"
+		return m, nil
+
+	case components.SessionManagerCloseMsg:
+		m.mode = modeChat
+		m.statusMsg = ""
+		return m, nil
+
+	// -- History Browser events --
+	case components.HistoryResumeMsg:
+		m.mode = modeChat
+		if err := m.resumeSession(msg.ID); err != nil {
+			m.statusMsg = "Failed to resume session: " + sanitiseError(err)
+			m.isError = true
+		}
+		return m, nil
+
+	case components.HistoryExportMsg:
+		exportDir := filepath.Join(config.Dir(), "exports")
+		exportPath := filepath.Join(exportDir, fmt.Sprintf("session-%s.md", msg.ID))
+		if err := m.app.Sessions.ExportMarkdown(msg.ID, exportPath); err != nil {
+			m.statusMsg = "Failed to export: " + sanitiseError(err)
+			m.isError = true
+			return m, nil
+		}
+		m.statusMsg = fmt.Sprintf("Exported transcript to %s", exportPath)
+		return m, nil
+
+	case components.HistoryBrowserCloseMsg:
+		m.mode = modeChat
+		m.statusMsg = ""
 		return m, nil
 
 	// -- Provider connection result --
@@ -250,7 +349,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Delegate keyboard to active modal picker if open
+		// Delegate keyboard to active modal picker / manager if open
+		if m.mode == modeSessionManager {
+			var cmd tea.Cmd
+			m.sessionMgr, cmd = m.sessionMgr.Update(msg)
+			return m, cmd
+		}
+		if m.mode == modeHistoryBrowser {
+			var cmd tea.Cmd
+			m.historyBrowser, cmd = m.historyBrowser.Update(msg)
+			return m, cmd
+		}
 		if m.mode != modeChat {
 			return m.updateSelector(msg)
 		}
@@ -276,6 +385,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.mode == modeChat {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
+
+	if m.mode == modeSessionManager {
+		var cmd tea.Cmd
+		m.sessionMgr, cmd = m.sessionMgr.Update(msg)
+		return m, cmd
+	}
+
+	if m.mode == modeHistoryBrowser {
+		var cmd tea.Cmd
+		m.historyBrowser, cmd = m.historyBrowser.Update(msg)
 		return m, cmd
 	}
 
@@ -389,8 +510,11 @@ func (m Model) handleCommand(msg components.CommandMsg) (tea.Model, tea.Cmd) {
 	case "model":
 		return m.openModelSelector()
 
-	case "session", "history":
-		return m.openSessionSelector()
+	case "session":
+		return m.openSessionManager()
+
+	case "history":
+		return m.openHistoryBrowser()
 
 	case "home", "new":
 		return m.homeSession()
@@ -522,19 +646,39 @@ func (m Model) homeSession() (tea.Model, tea.Cmd) {
 
 	m.session = newSess
 	m.chatView.ClearMessages()
-	m.statusMsg = ""
+	m.statusMsg = "Returned home. Type a prompt or /help."
 	m.isError = false
-
-	// Show greeting for the active persona on the fresh session.
-	persona := m.app.Personas.Active()
-	if persona.Greeting != "" {
-		m.chatView.AddMessage(provider.RoleAssistant, persona.Name, persona.Greeting)
-	}
 
 	if m.app.Logger != nil {
 		m.app.Logger.Printf("user returned home (new session %s)", newSess.ID)
 	}
 	return m, nil
+}
+
+// resumeSession loads a session by ID and replays its messages into the chat view.
+func (m *Model) resumeSession(id string) error {
+	sess, err := m.app.Sessions.Load(id)
+	if err != nil {
+		return err
+	}
+	m.session = sess
+	m.chatView.ClearMessages()
+	persona := m.app.Personas.Active()
+	for _, msg := range sess.Messages {
+		switch msg.Role {
+		case provider.RoleUser:
+			m.chatView.AddMessage(provider.RoleUser, "You", msg.Content)
+		case provider.RoleAssistant:
+			pName := persona.Name
+			if sess.Persona != "" {
+				pName = sess.Persona
+			}
+			m.chatView.AddMessage(provider.RoleAssistant, pName, msg.Content)
+		}
+	}
+	m.statusMsg = fmt.Sprintf("Resumed session: %s", sess.Title)
+	m.isError = false
+	return nil
 }
 
 func (m Model) openProviderSelector() (tea.Model, tea.Cmd) {
@@ -618,31 +762,29 @@ func (m Model) openModelSelector() (tea.Model, tea.Cmd) {
 
 type modelsLoadedMsg struct{ items []components.SelectorItem }
 
-func (m Model) openSessionSelector() (tea.Model, tea.Cmd) {
+func (m Model) openSessionManager() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		entries, err := m.app.Sessions.List()
 		if err != nil {
 			return stream.ErrorMsg{Err: err}
 		}
-
-		groups := session.GroupByDate(entries)
-		var items []components.SelectorItem
-		for _, g := range groups {
-			for _, e := range g.Sessions {
-				items = append(items, components.SelectorItem{
-					ID:    e.ID,
-					Label: e.Title,
-					Badge: g.Label,
-					Sub:   fmt.Sprintf("%s  ·  %s", e.Provider, e.UpdatedAt.Format("Jan 2, 15:04")),
-				})
-			}
-		}
-
-		return sessionsLoadedMsg{items: items}
+		return sessionEntriesLoadedMsg{entries: entries}
 	}
 }
 
-type sessionsLoadedMsg struct{ items []components.SelectorItem }
+type sessionEntriesLoadedMsg struct{ entries []session.ListEntry }
+
+func (m Model) openHistoryBrowser() (tea.Model, tea.Cmd) {
+	return m, func() tea.Msg {
+		entries, err := m.app.Sessions.List()
+		if err != nil {
+			return stream.ErrorMsg{Err: err}
+		}
+		return historyLoadedMsg{entries: entries}
+	}
+}
+
+type historyLoadedMsg struct{ entries []session.ListEntry }
 
 func (m Model) openThemeSelector() (tea.Model, tea.Cmd) {
 	themes := m.app.Themes.All()
@@ -663,32 +805,6 @@ func (m Model) openThemeSelector() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateSelector(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Handle async loads
-	switch msg := msg.(type) {
-	case modelsLoadedMsg:
-		m.selector = components.Selector{
-			Title:   "Select Model",
-			Context: "model",
-			Items:   msg.items,
-			Width:   m.width,
-			Height:  m.height,
-		}
-		m.mode = modeModelSelector
-		return m, nil
-
-	case sessionsLoadedMsg:
-		m.selector = components.Selector{
-			Title:    "Session History",
-			Context:  "session",
-			Items:    msg.items,
-			ActiveID: m.session.ID,
-			Width:    m.width,
-			Height:   m.height,
-		}
-		m.mode = modeSessionSelector
-		return m, nil
-	}
-
 	var cmd tea.Cmd
 	m.selector, cmd = m.selector.Update(msg)
 	return m, cmd
@@ -725,25 +841,11 @@ func (m Model) handleSelectorChosen(msg components.SelectorChosenMsg) (tea.Model
 		m.statusMsg = fmt.Sprintf("Model set to: %s", msg.Item.ID)
 
 	case "session":
-		sess, err := m.app.Sessions.Load(msg.Item.ID)
-		if err != nil {
+		if err := m.resumeSession(msg.Item.ID); err != nil {
 			m.statusMsg = "Failed to load session: " + sanitiseError(err)
 			m.isError = true
 			return m, nil
 		}
-		m.session = sess
-		m.chatView.ClearMessages()
-		// Replay history into chat view
-		persona := m.app.Personas.Active()
-		for _, msg := range sess.Messages {
-			switch msg.Role {
-			case provider.RoleUser:
-				m.chatView.AddMessage(provider.RoleUser, "You", msg.Content)
-			case provider.RoleAssistant:
-				m.chatView.AddMessage(provider.RoleAssistant, persona.Name, msg.Content)
-			}
-		}
-		m.statusMsg = fmt.Sprintf("Resumed session: %s", sess.Title)
 
 	case "theme":
 		if err := m.app.Themes.SetActive(msg.Item.ID); err != nil {
@@ -799,6 +901,16 @@ func (m Model) View() string {
 	}.View()
 
 	// 3. Modal Overlay Dialog (if active)
+	if m.mode == modeSessionManager {
+		managerView := m.sessionMgr.View()
+		centered := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, managerView)
+		return header + "\n" + centered + "\n" + statusBar
+	}
+	if m.mode == modeHistoryBrowser {
+		historyView := m.historyBrowser.View()
+		centered := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, historyView)
+		return header + "\n" + centered + "\n" + statusBar
+	}
 	if m.mode != modeChat {
 		selectorView := m.selector.View()
 		centered := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, selectorView)

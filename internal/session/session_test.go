@@ -108,3 +108,58 @@ func TestProviderHistory(t *testing.T) {
 		t.Error("wrong role for first message")
 	}
 }
+
+func TestSessionRenameAndSearchAndExport(t *testing.T) {
+	dir := t.TempDir()
+	mgr, err := session.NewManager(dir)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	s, err := mgr.Create("ollama", "ollama", "hikari", "llama3.2")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	s.AddMessage(provider.RoleUser, "How to build a terminal dashboard?")
+	s.AddMessage(provider.RoleAssistant, "Use bubbletea and lipgloss!")
+	if err := mgr.Save(s); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Test Search by content
+	results, err := mgr.Search("dashboard")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 search result for 'dashboard', got %d", len(results))
+	}
+
+	// Test Rename
+	newTitle := "Custom Terminal Dashboard Guide"
+	if err := mgr.Rename(s.ID, newTitle); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	loaded, err := mgr.Load(s.ID)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Title != newTitle {
+		t.Errorf("expected title %q, got %q", newTitle, loaded.Title)
+	}
+
+	// Test ExportMarkdown
+	exportFile := dir + "/exports/session.md"
+	if err := mgr.ExportMarkdown(s.ID, exportFile); err != nil {
+		t.Fatalf("ExportMarkdown: %v", err)
+	}
+	// Verify export file exists
+	list, err := mgr.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0].MessageCount != 2 {
+		t.Errorf("expected 1 entry with 2 messages, got %+v", list)
+	}
+}
+
