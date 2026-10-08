@@ -162,4 +162,3 @@ func TestSessionRenameAndSearchAndExport(t *testing.T) {
 		t.Errorf("expected 1 entry with 2 messages, got %+v", list)
 	}
 }
-

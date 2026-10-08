@@ -27,7 +27,7 @@ func TestSessionManagerNavigationAndSwitch(t *testing.T) {
 	mgr, _ = mgr.Update(tea.KeyMsg{Type: tea.KeyDown})
 
 	// Press Enter to switch
-	mgr, cmd := mgr.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := mgr.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("expected command on Enter")
 	}
@@ -74,7 +74,7 @@ func TestSessionManagerActions(t *testing.T) {
 	// Test 'd' for delete
 	mgr, _ = mgr.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	// Confirm delete with 'y'
-	mgr, delCmd := mgr.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	_, delCmd := mgr.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	if delCmd == nil {
 		t.Fatal("expected delete command")
 	}

@@ -210,7 +210,7 @@ func (s SessionManager) View() string {
 			styles.Warning.Render("⚠ CONFIRM DELETION"),
 			title,
 			styles.Muted.Render("This action cannot be undone."),
-			styles.Error.Render(" [y] Confirm Delete ") + "  " + styles.Muted.Render("[n/Esc] Cancel"),
+			styles.Error.Render(" [y] Confirm Delete ")+"  "+styles.Muted.Render("[n/Esc] Cancel"),
 		)
 		b.WriteString(confirmText)
 		return styles.SelectorBox.Width(boxW).Render(b.String())

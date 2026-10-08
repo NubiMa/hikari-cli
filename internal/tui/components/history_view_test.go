@@ -57,7 +57,7 @@ func TestHistoryBrowserPreviewAndResume(t *testing.T) {
 	}
 
 	// Press 'e' to export
-	hb, exportCmd := hb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	_, exportCmd := hb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	if exportCmd == nil {
 		t.Fatal("expected command on 'e'")
 	}

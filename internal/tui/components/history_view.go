@@ -25,19 +25,19 @@ type HistoryBrowserCloseMsg struct{}
 
 // HistoryBrowser provides a rich dual-pane chronological conversation browser with live transcript preview.
 type HistoryBrowser struct {
-	allEntries     []session.ListEntry
-	filtered       []session.ListEntry
-	groups         []session.HistoryGroup
-	cursor         int
-	activeSessID   string
-	loadedSession  *session.Session
-	sessionLoader  func(id string) (*session.Session, error)
-	searchInput    textinput.Model
-	isSearching    bool
-	focusPreview   bool
-	previewScroll  int
-	Width          int
-	Height         int
+	allEntries    []session.ListEntry
+	filtered      []session.ListEntry
+	groups        []session.HistoryGroup
+	cursor        int
+	activeSessID  string
+	loadedSession *session.Session
+	sessionLoader func(id string) (*session.Session, error)
+	searchInput   textinput.Model
+	isSearching   bool
+	focusPreview  bool
+	previewScroll int
+	Width         int
+	Height        int
 }
 
 // NewHistoryBrowser constructs the HistoryBrowser component.
